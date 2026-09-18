@@ -3,6 +3,11 @@ package com.hikari.app.ui.navigation
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
@@ -230,12 +235,18 @@ private fun AppBottomBar(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            tab.icon,
-                            contentDescription = tab.label,
-                            modifier = Modifier.size(21.dp),
-                            tint = if (selected) primary else muted
-                        )
+                        AnimatedContent(
+                            targetState = selected,
+                            transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.82f)).togetherWith(fadeOut()) },
+                            label = "nav_icon"
+                        ) { active ->
+                            Icon(
+                                tab.icon,
+                                contentDescription = tab.label,
+                                modifier = Modifier.size(if (active) 22.dp else 21.dp),
+                                tint = if (active) primary else muted
+                            )
+                        }
                         Spacer(Modifier.height(3.dp))
                         Text(
                             tab.label.uppercase(),
