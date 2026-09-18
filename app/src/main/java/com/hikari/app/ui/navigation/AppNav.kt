@@ -287,22 +287,6 @@ private val Tabs = listOf(
     Tab(Routes.DOWNLOADS, "Downloads", Icons.Filled.Download),
 )
 
-private data class Tab(
-    val route: String,
-    val label: String,
-    val icon: ImageVector,
-)
-
-private val Tabs = listOf(
-    Tab(Routes.HOME, "Home", Icons.Filled.Home),
-    Tab(Routes.SEARCH, "Search", Icons.Filled.Search),
-    Tab(Routes.LIBRARY, "Library", Icons.Filled.Favorite),
-    Tab(Routes.HISTORY, "History", Icons.Filled.History),
-    Tab(Routes.DOWNLOADS, "Downloads", Icons.Filled.Download),
-    Tab(Routes.EXTENSIONS, "Extensions", Icons.Filled.Extension),
-    Tab(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
-)
-
 @Composable
 fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     val nav = rememberNavController()
