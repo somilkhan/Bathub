@@ -55,7 +55,7 @@ private val HikariLine = Color(0xFF303030)
 
 @Composable
 fun HikariFeaturedCarousel(items: List<MediaItem>, onClick: (MediaItem) -> Unit) {
-    val slides = remember(items) { items.distinctBy { "\${it.providerId}|\${it.type}|\${it.id}" }.take(8) }
+    val slides = remember(items) { items.distinctBy { "${it.providerId}|${it.type}|${it.id}" }.take(8) }
     if (slides.isEmpty()) return
     val state = rememberLazyListState()
     val fling = rememberSnapFlingBehavior(state)
@@ -74,7 +74,7 @@ fun HikariFeaturedCarousel(items: List<MediaItem>, onClick: (MediaItem) -> Unit)
         contentPadding = PaddingValues(0.dp),
         horizontalArrangement = Arrangement.spacedBy(0.dp),
     ) {
-        itemsIndexed(slides, key = { _, item -> "\${item.providerId}|\${item.type}|\${item.id}" }) { _, item ->
+        itemsIndexed(slides, key = { _, item -> "${item.providerId}|${item.type}|${item.id}" }) { _, item ->
             HikariFeaturedCard(item, onClick = { onClick(item) })
         }
     }
@@ -132,7 +132,7 @@ fun HikariCatalogShelf(title: String, items: List<MediaItem>, onClick: (MediaIte
         }
         Spacer(Modifier.height(14.dp))
         LazyRow(contentPadding = PaddingValues(horizontal = 26.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            itemsIndexed(items.take(12), key = { index, item -> "\${item.providerId}|\${item.type}|\${item.id}|\$index" }) { index, item ->
+            itemsIndexed(items.take(12), key = { index, item -> "${item.providerId}|${item.type}|${item.id}|\$index" }) { index, item ->
                 HikariPosterCard(item, index, onClick = { onClick(item) })
             }
         }
@@ -145,7 +145,7 @@ private fun HikariPosterCard(item: MediaItem, index: Int, onClick: () -> Unit) {
         Box(Modifier.fillMaxWidth().height(204.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF191919))) {
             AsyncImage(model = PosterLoader.model(item.posterUrl, item.backdropUrl), contentDescription = item.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             Text(
-                "\${index + 1}", color = HikariWhite.copy(alpha = 0.22f), fontSize = 74.sp, lineHeight = 74.sp,
+                "${index + 1}", color = HikariWhite.copy(alpha = 0.22f), fontSize = 74.sp, lineHeight = 74.sp,
                 fontWeight = FontWeight.Thin, modifier = Modifier.align(Alignment.BottomStart).offset(x = (-2).dp, y = 17.dp).graphicsLayer(alpha = 0.9f),
             )
         }
