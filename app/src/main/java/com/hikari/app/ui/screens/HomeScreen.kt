@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,6 +20,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
@@ -62,8 +66,8 @@ import com.hikari.app.data.ProviderType
 import com.hikari.app.ui.PosterLoader
 import com.hikari.app.ui.components.ContinueWatchingRow
 import com.hikari.app.ui.components.EmptyState
-import com.hikari.app.ui.components.HeroBanner
-import com.hikari.app.ui.components.MediaRow
+import com.hikari.app.ui.components.HikariCatalogShelf
+import com.hikari.app.ui.components.HikariFeaturedCarousel
 import com.hikari.app.ui.components.ShimmerRow
 import com.hikari.app.ui.navigation.Routes
 import com.hikari.app.providers.ContentProvider
@@ -226,6 +230,7 @@ fun HomeScreen(nav: NavHostController) {
     var showPicker by remember { mutableStateOf(false) }
     var showTranslate by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
+    var showMoreActions by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     // Cloudflare verification: when the selected extension's site is blocked
@@ -380,10 +385,10 @@ fun HomeScreen(nav: NavHostController) {
                     }
                 }
             }
-            item {
-                if (featured.isNotEmpty()) {
+            if (featured.isNotEmpty()) {
+                item(key = "featured") {
                     Box(Modifier.fillMaxWidth()) {
-                        HeroBanner(
+                        HikariFeaturedCarousel(
                             items = featured,
                             onClick = { item ->
                                 Routes.safeNavigate(
@@ -396,22 +401,11 @@ fun HomeScreen(nav: NavHostController) {
                             },
                         )
                         HomeHeader(
-                            selected = selected,
-                            onSearch = openSearch,
-                            onTranslate = { showTranslate = true },
-                            onVerify = openVerify,
-                            overlay = true,
+                            onProviderPicker = { showPicker = true },
+                            onMore = { showMoreActions = true },
                             modifier = Modifier.align(Alignment.TopCenter),
                         )
                     }
-                } else {
-                    HomeHeader(
-                        selected = selected,
-                        onSearch = openSearch,
-                        onTranslate = { showTranslate = true },
-                        onVerify = openVerify,
-                        overlay = false,
-                    )
                 }
             }
             if (!hideContinue && continueEntries.isNotEmpty()) {
@@ -441,14 +435,17 @@ fun HomeScreen(nav: NavHostController) {
             }
             rows.forEach { row ->
                 item(key = row.key.ifBlank { "${row.providerName}|${row.title}" }) {
-                    MediaRow(
+                    Column(Modifier.padding(vertical = 18.dp)) {
+                    HikariCatalogShelf(
                         title = row.title,
-                        providerName = row.providerName,
                         items = row.items,
                         onClick = { item ->
                             Routes.safeNavigate(
                                 nav,
-                                Routes.detail(item.providerId, item.type, item.id, item.title, item.posterUrl, item.rawType)
+                                Routes.detail(
+                                    item.providerId, item.type, item.id,
+                                    item.title, item.posterUrl, item.rawType
+                                )
                             )
                         },
                         onShowAll = {
@@ -459,8 +456,9 @@ fun HomeScreen(nav: NavHostController) {
                                     row.providerName, row.type, row.rawType
                                 )
                             )
-                        }
+                        },
                     )
+                    }
                 }
             }
             if (rows.isEmpty() && !loading) {
@@ -505,34 +503,6 @@ fun HomeScreen(nav: NavHostController) {
             }
         }
 
-        // Floating source pill (Anikoto-style): shows the current provider and
-        // opens the picker sheet. Sits above the bottom nav bar.
-        Surface(
-            onClick = { showPicker = true },
-            shape = RoundedCornerShape(50),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-        ) {
-            Row(
-                Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Filled.List,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    "  ${selectedName ?: "All providers"}",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
     }
 
     if (showPicker) {
@@ -580,6 +550,21 @@ fun HomeScreen(nav: NavHostController) {
                 TextButton(onClick = { showTranslate = false }) { Text("Cancel") }
             },
         )
+    }
+
+    if (showMoreActions) {
+        ModalBottomSheet(onDismissRequest = { showMoreActions = false }) {
+            Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+                Text("MORE", modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp), color = Color(0xFF8C8C88), fontSize = 11.sp, letterSpacing = 2.sp)
+                if (selected != null) {
+                    androidx.compose.material3.ListItem(headlineContent = { Text("Translate") }, leadingContent = { Icon(Icons.Filled.Public, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; showTranslate = true })
+                    androidx.compose.material3.ListItem(headlineContent = { Text("Verify site") }, leadingContent = { Icon(Icons.Filled.Check, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; openVerify() })
+                }
+                androidx.compose.material3.ListItem(headlineContent = { Text("History") }, leadingContent = { Icon(androidx.compose.material.icons.Icons.Filled.History, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; Routes.navigateTab(nav, Routes.HISTORY) })
+                androidx.compose.material3.ListItem(headlineContent = { Text("Extensions") }, leadingContent = { Icon(androidx.compose.material.icons.Icons.Filled.Extension, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; Routes.navigateTab(nav, Routes.EXTENSIONS) })
+                androidx.compose.material3.ListItem(headlineContent = { Text("Settings") }, leadingContent = { Icon(Icons.Filled.List, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; Routes.navigateTab(nav, Routes.SETTINGS) })
+            }
+        }
     }
 
     // Search scope chooser: global (every provider, with the provider chips to
@@ -729,74 +714,30 @@ private fun webUrlFor(p: ContentProvider): String? = when (p.config.type) {
     else -> null
 }
 
-/** The Home top bar. In [overlay] mode it is drawn on top of the hero banner
- *  (white text/icons so it reads over the backdrop art); otherwise it is a
- *  normal, opaque header above the rows. */
+/** Floating HIKARI header over the full-width hero. Search stays in the bottom navigation. */
 @Composable
 private fun HomeHeader(
-    selected: String?,
-    onSearch: () -> Unit,
-    onTranslate: () -> Unit,
-    onVerify: () -> Unit,
-    overlay: Boolean,
+    onProviderPicker: () -> Unit,
+    onMore: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val accent = MaterialTheme.colorScheme.primary
-    val iconTint = if (overlay) Color.White else accent
-    val subtitleColor =
-        if (overlay) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                "Hikari",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = accent,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-            Text(
-                "Every stream, one place.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = subtitleColor,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
+        IconButton(onClick = onProviderPicker) {
+            Icon(Icons.Filled.List, contentDescription = "Choose extension", tint = Color.White, modifier = Modifier.size(27.dp))
         }
-        IconButton(onClick = onSearch) {
-            Icon(Icons.Filled.Search, contentDescription = "Search", tint = iconTint)
-        }
-        // Translate: per-extension toggle — turns this extension's titles/text
-        // into English inside the app. Shown whenever a provider is selected.
-        selected?.let { pid ->
-            val translateOn = com.hikari.app.data.Translator.isOn(pid)
-            IconButton(onClick = onTranslate) {
-                Text(
-                    "A\u3042",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = when {
-                        translateOn -> accent
-                        overlay -> Color.White.copy(alpha = 0.7f)
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
-            }
-        }
-        // Cloudflare/verify: opens the extension's site in the WebView so the
-        // user can pass a WAF check once; the catalog reloads by itself after.
-        if (selected != null) {
-            IconButton(onClick = onVerify) {
-                Icon(
-                    Icons.Filled.Public,
-                    contentDescription = "Open site in web view (Cloudflare verification)",
-                    tint = iconTint
-                )
-            }
+        Text(
+            "光  HIKARI",
+            modifier = Modifier.weight(1f),
+            color = Color.White,
+            fontSize = 15.sp,
+            letterSpacing = 4.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        IconButton(onClick = onMore) {
+            Text("⋯", color = Color.White, fontSize = 24.sp, letterSpacing = 1.sp)
         }
     }
 }

@@ -3,6 +3,11 @@ package com.hikari.app.ui.navigation
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
@@ -30,9 +35,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ListItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
@@ -189,40 +198,29 @@ object Routes {
 private fun AppBottomBar(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
+    onMore: () -> Unit,
 ) {
-    val primary = MaterialTheme.colorScheme.primary
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    // Equal slots are not much room, and the labels ("Downloads", "Extensions")
-    // are the longest text in the app. On a phone whose accessibility Font size
-    // AND/OR Display size is turned up, the labels grew past their slot and were
-    // hard-clipped mid-word ("Downloa"). Size the label so it always renders at
-    // the SAME physical size — dividing out the font scale — and the worst case
-    // is then a full word in a slightly tight slot. (When "In-app UI scale" is
-    // on, fontScale is 1 here and the scale rides on the density, so the labels
-    // still scale with that setting.) With the Library tab there are seven
-    // slots, so the base size drops a notch to keep every label whole.
-    val labelScale = LocalDensity.current.fontScale.coerceAtLeast(0.5f)
-    val labelSp = if (Tabs.size > 6) 8f else 9f
+    val primary = Color(0xFFEDEDE8)
+    val muted = Color(0xFF8C8C88)
+    val selectedSurface = Color(0xFF1D1D1B)
     Box(
         Modifier
             .fillMaxWidth()
-            // Keep the floating bar clear of the gesture/navigation bar when the
-            // system bars are visible (they are hidden while immersive, so this
-            // is 0 in the normal case and simply lifts the bar when they show).
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 8.dp, vertical = 10.dp)
+            .padding(horizontal = 26.dp, vertical = 12.dp)
     ) {
         Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-            shadowElevation = 10.dp,
+            shape = RoundedCornerShape(30.dp),
+            color = Color(0xF0141413),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF30302E)),
+            shadowElevation = 0.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .height(60.dp)
-                    .padding(horizontal = 2.dp, vertical = 6.dp),
+                    .height(62.dp)
+                    .padding(horizontal = 5.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Tabs.forEach { tab ->
@@ -230,32 +228,59 @@ private fun AppBottomBar(
                     Column(
                         Modifier
                             .weight(1f)
-                            .height(48.dp)
+                            .height(50.dp)
                             .clip(RoundedCornerShape(22.dp))
-                            .background(if (selected) primary.copy(alpha = 0.16f) else Color.Transparent)
+                            .background(if (selected) selectedSurface else Color.Transparent)
                             .clickable { onNavigate(tab.route) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            tab.icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = if (selected) primary else muted
-                        )
-                        Spacer(Modifier.height(2.dp))
+                        AnimatedContent(
+                            targetState = selected,
+                            transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.82f)).togetherWith(fadeOut()) },
+                            label = "nav_icon"
+                        ) { active ->
+                            Icon(
+                                tab.icon,
+                                contentDescription = tab.label,
+                                modifier = Modifier.size(if (active) 22.dp else 21.dp),
+                                tint = if (active) primary else muted
+                            )
+                        }
+                        Spacer(Modifier.height(3.dp))
                         Text(
-                            tab.label,
+                            tab.label.uppercase(),
                             maxLines = 1,
                             softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                            fontSize = (labelSp / labelScale).sp,
-                            textAlign = TextAlign.Center,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 9.sp,
+                            letterSpacing = 0.8.sp,
+                            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
                             color = if (selected) primary else muted,
-                            modifier = Modifier.fillMaxWidth()
                         )
                     }
+                }
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .height(50.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .clickable(onClick = onMore),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Filled.Settings,
+                        contentDescription = "More",
+                        modifier = Modifier.size(21.dp),
+                        tint = muted
+                    )
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        "MORE",
+                        fontSize = 9.sp,
+                        letterSpacing = 0.8.sp,
+                        color = muted,
+                    )
                 }
             }
         }
@@ -272,12 +297,10 @@ private val Tabs = listOf(
     Tab(Routes.HOME, "Home", Icons.Filled.Home),
     Tab(Routes.SEARCH, "Search", Icons.Filled.Search),
     Tab(Routes.LIBRARY, "Library", Icons.Filled.Favorite),
-    Tab(Routes.HISTORY, "History", Icons.Filled.History),
     Tab(Routes.DOWNLOADS, "Downloads", Icons.Filled.Download),
-    Tab(Routes.EXTENSIONS, "Extensions", Icons.Filled.Extension),
-    Tab(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     val nav = rememberNavController()
@@ -287,7 +310,8 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     // tab (so the bar shows and Search highlights); everything else matches on
     // its base path.
     val tabRoute = Routes.tabBaseOf(currentRoute)
-    val showBar = tabRoute in Tabs.map { it.route }
+    val showBar = tabRoute in Tabs.map { it.route } || tabRoute in listOf(Routes.HISTORY, Routes.EXTENSIONS, Routes.SETTINGS)
+    var showMore by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     // The WebView's "Go to app home" menu item bumps this — landing on the
     // app's own Home tab (not the website's home page).
@@ -340,8 +364,46 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
             if (showBar) {
                 AppBottomBar(
                     currentRoute = tabRoute,
-                    onNavigate = { route -> Routes.navigateTab(nav, route) }
+                    onNavigate = { route -> Routes.navigateTab(nav, route) },
+                    onMore = { showMore = true },
                 )
+                if (showMore) {
+                    ModalBottomSheet(onDismissRequest = { showMore = false }) {
+                        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+                            Text(
+                                "MORE",
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                                color = Color(0xFF8C8C88),
+                                fontSize = 11.sp,
+                                letterSpacing = 2.sp,
+                            )
+                            ListItem(
+                                headlineContent = { Text("History") },
+                                leadingContent = { Icon(Icons.Filled.History, contentDescription = null) },
+                                modifier = Modifier.clickable {
+                                    showMore = false
+                                    Routes.navigateTab(nav, Routes.HISTORY)
+                                }
+                            )
+                            ListItem(
+                                headlineContent = { Text("Extensions") },
+                                leadingContent = { Icon(Icons.Filled.Extension, contentDescription = null) },
+                                modifier = Modifier.clickable {
+                                    showMore = false
+                                    Routes.navigateTab(nav, Routes.EXTENSIONS)
+                                }
+                            )
+                            ListItem(
+                                headlineContent = { Text("Settings") },
+                                leadingContent = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                                modifier = Modifier.clickable {
+                                    showMore = false
+                                    Routes.navigateTab(nav, Routes.SETTINGS)
+                                }
+                            )
+                        }
+                    }
+                }
             }
         }
     ) { padding ->
