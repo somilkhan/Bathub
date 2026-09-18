@@ -24,3 +24,14 @@ jobs:
           cache-disabled: true
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
+      - name: Verify APK
+        run: |
+          find app/build/outputs/apk -type f -name "*.apk" -print
+          test -n "$(find app/build/outputs/apk -type f -name "*.apk" -print -quit)"
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hikari-debug-apk
+          path: app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 14
