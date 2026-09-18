@@ -392,6 +392,7 @@ fun HomeScreen(nav: NavHostController) {
             if (featured.isNotEmpty()) {
                 item(key = "featured") {
                     val item = featured.first()
+                    Column(Modifier.padding(horizontal = 24.dp)) {
                     HikariFeaturedCard(
                         item = item,
                         onClick = {
@@ -404,6 +405,7 @@ fun HomeScreen(nav: NavHostController) {
                             )
                         },
                     )
+                    }
                 }
             }
             if (!hideContinue && continueEntries.isNotEmpty()) {
@@ -433,6 +435,7 @@ fun HomeScreen(nav: NavHostController) {
             }
             rows.forEach { row ->
                 item(key = row.key.ifBlank { "${row.providerName}|${row.title}" }) {
+                    Column(Modifier.padding(vertical = 18.dp)) {
                     HikariCatalogShelf(
                         title = row.title,
                         items = row.items,
@@ -455,6 +458,7 @@ fun HomeScreen(nav: NavHostController) {
                             )
                         },
                     )
+                    }
                 }
             }
             if (rows.isEmpty() && !loading) {
