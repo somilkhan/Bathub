@@ -313,7 +313,7 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     // tab (so the bar shows and Search highlights); everything else matches on
     // its base path.
     val tabRoute = Routes.tabBaseOf(currentRoute)
-    val showBar = tabRoute in Tabs.map { it.route }
+    val showBar = tabRoute in Tabs.map { it.route } || tabRoute in listOf(Routes.HISTORY, Routes.EXTENSIONS, Routes.SETTINGS)
     var showMore by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     // The WebView's "Go to app home" menu item bumps this — landing on the
