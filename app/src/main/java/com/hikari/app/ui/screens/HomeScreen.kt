@@ -63,7 +63,7 @@ import com.hikari.app.ui.PosterLoader
 import com.hikari.app.ui.components.ContinueWatchingRow
 import com.hikari.app.ui.components.EmptyState
 import com.hikari.app.ui.components.HikariCatalogShelf
-import com.hikari.app.ui.components.HikariFeaturedCard
+import com.hikari.app.ui.components.HikariFeaturedCarousel
 import com.hikari.app.ui.components.ShimmerRow
 import com.hikari.app.ui.navigation.Routes
 import com.hikari.app.providers.ContentProvider
@@ -226,6 +226,7 @@ fun HomeScreen(nav: NavHostController) {
     var showPicker by remember { mutableStateOf(false) }
     var showTranslate by remember { mutableStateOf(false) }
     var showSearchDialog by remember { mutableStateOf(false) }
+    var showMoreActions by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     // Cloudflare verification: when the selected extension's site is blocked
@@ -380,31 +381,26 @@ fun HomeScreen(nav: NavHostController) {
                     }
                 }
             }
-            item {
-                HomeHeader(
-                    selected = selected,
-                    onSearch = openSearch,
-                    onTranslate = { showTranslate = true },
-                    onVerify = openVerify,
-                    onProviderPicker = { showPicker = true },
-                )
-            }
             if (featured.isNotEmpty()) {
                 item(key = "featured") {
-                    val item = featured.first()
-                    Column(Modifier.padding(horizontal = 24.dp)) {
-                    HikariFeaturedCard(
-                        item = item,
-                        onClick = {
-                            Routes.safeNavigate(
-                                nav,
-                                Routes.detail(
-                                    item.providerId, item.type, item.id,
-                                    item.title, item.posterUrl, item.rawType
+                    Box(Modifier.fillMaxWidth()) {
+                        HikariFeaturedCarousel(
+                            items = featured,
+                            onClick = { item ->
+                                Routes.safeNavigate(
+                                    nav,
+                                    Routes.detail(
+                                        item.providerId, item.type, item.id,
+                                        item.title, item.posterUrl, item.rawType
+                                    )
                                 )
-                            )
-                        },
-                    )
+                            },
+                        )
+                        HomeHeader(
+                            onProviderPicker = { showPicker = true },
+                            onMore = { showMoreActions = true },
+                            modifier = Modifier.align(Alignment.TopCenter),
+                        )
                     }
                 }
             }
@@ -550,6 +546,21 @@ fun HomeScreen(nav: NavHostController) {
                 TextButton(onClick = { showTranslate = false }) { Text("Cancel") }
             },
         )
+    }
+
+    if (showMoreActions) {
+        ModalBottomSheet(onDismissRequest = { showMoreActions = false }) {
+            Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+                Text("MORE", modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp), color = Color(0xFF8C8C88), fontSize = 11.sp, letterSpacing = 2.sp)
+                if (selected != null) {
+                    androidx.compose.material3.ListItem(headlineContent = { Text("Translate") }, leadingContent = { Icon(Icons.Filled.Public, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; showTranslate = true })
+                    androidx.compose.material3.ListItem(headlineContent = { Text("Verify site") }, leadingContent = { Icon(Icons.Filled.Check, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; openVerify() })
+                }
+                androidx.compose.material3.ListItem(headlineContent = { Text("History") }, leadingContent = { Icon(androidx.compose.material.icons.Icons.Filled.History, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; Routes.navigateTab(nav, Routes.HISTORY) })
+                androidx.compose.material3.ListItem(headlineContent = { Text("Extensions") }, leadingContent = { Icon(androidx.compose.material.icons.Icons.Filled.Extension, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; Routes.navigateTab(nav, Routes.EXTENSIONS) })
+                androidx.compose.material3.ListItem(headlineContent = { Text("Settings") }, leadingContent = { Icon(Icons.Filled.List, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; Routes.navigateTab(nav, Routes.SETTINGS) })
+            }
+        }
     }
 
     // Search scope chooser: global (every provider, with the provider chips to
@@ -699,64 +710,30 @@ private fun webUrlFor(p: ContentProvider): String? = when (p.config.type) {
     else -> null
 }
 
-/** The Home top bar. In [overlay] mode it is drawn on top of the hero banner
- *  (white text/icons so it reads over the backdrop art); otherwise it is a
- *  normal, opaque header above the rows. */
+/** Floating HIKARI header over the full-width hero. Search stays in the bottom navigation. */
 @Composable
 private fun HomeHeader(
-    selected: String?,
-    onSearch: () -> Unit,
-    onTranslate: () -> Unit,
-    onVerify: () -> Unit,
     onProviderPicker: () -> Unit,
+    onMore: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 22.dp, vertical = 18.dp),
+        modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onProviderPicker) {
-            Icon(
-                Icons.Filled.List,
-                contentDescription = "Choose extension",
-                tint = Color(0xFFD8D8D2),
-                modifier = Modifier.size(28.dp),
-            )
+            Icon(Icons.Filled.List, contentDescription = "Choose extension", tint = Color.White, modifier = Modifier.size(27.dp))
         }
         Text(
             "光  HIKARI",
             modifier = Modifier.weight(1f),
-            color = Color(0xFFEDEDE9),
+            color = Color.White,
             fontSize = 15.sp,
             letterSpacing = 4.sp,
             fontWeight = FontWeight.Medium,
         )
-        IconButton(onClick = onSearch) {
-            Text(
-                "+",
-                color = Color(0xFFEDEDE9),
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Light,
-            )
-        }
-        if (selected != null) {
-            IconButton(onClick = onVerify) {
-                Icon(
-                    Icons.Filled.Public,
-                    contentDescription = "Verify extension site",
-                    tint = Color(0xFFB9B9B3),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            IconButton(onClick = onTranslate) {
-                Text(
-                    "···",
-                    color = Color(0xFFB9B9B3),
-                    fontSize = 18.sp,
-                    letterSpacing = 2.sp,
-                )
-            }
+        IconButton(onClick = onMore) {
+            Text("⋯", color = Color.White, fontSize = 24.sp, letterSpacing = 1.sp)
         }
     }
 }
