@@ -62,8 +62,8 @@ import com.hikari.app.data.ProviderType
 import com.hikari.app.ui.PosterLoader
 import com.hikari.app.ui.components.ContinueWatchingRow
 import com.hikari.app.ui.components.EmptyState
-import com.hikari.app.ui.components.HeroBanner
-import com.hikari.app.ui.components.MediaRow
+import com.hikari.app.ui.components.HikariCatalogShelf
+import com.hikari.app.ui.components.HikariFeaturedCard
 import com.hikari.app.ui.components.ShimmerRow
 import com.hikari.app.ui.navigation.Routes
 import com.hikari.app.providers.ContentProvider
@@ -381,36 +381,28 @@ fun HomeScreen(nav: NavHostController) {
                 }
             }
             item {
-                if (featured.isNotEmpty()) {
-                    Box(Modifier.fillMaxWidth()) {
-                        HeroBanner(
-                            items = featured,
-                            onClick = { item ->
-                                Routes.safeNavigate(
-                                    nav,
-                                    Routes.detail(
-                                        item.providerId, item.type, item.id,
-                                        item.title, item.posterUrl, item.rawType
-                                    )
+                HomeHeader(
+                    selected = selected,
+                    onSearch = openSearch,
+                    onTranslate = { showTranslate = true },
+                    onVerify = openVerify,
+                    onProviderPicker = { showPicker = true },
+                )
+            }
+            if (featured.isNotEmpty()) {
+                item(key = "featured") {
+                    val item = featured.first()
+                    HikariFeaturedCard(
+                        item = item,
+                        onClick = {
+                            Routes.safeNavigate(
+                                nav,
+                                Routes.detail(
+                                    item.providerId, item.type, item.id,
+                                    item.title, item.posterUrl, item.rawType
                                 )
-                            },
-                        )
-                        HomeHeader(
-                            selected = selected,
-                            onSearch = openSearch,
-                            onTranslate = { showTranslate = true },
-                            onVerify = openVerify,
-                            overlay = true,
-                            modifier = Modifier.align(Alignment.TopCenter),
-                        )
-                    }
-                } else {
-                    HomeHeader(
-                        selected = selected,
-                        onSearch = openSearch,
-                        onTranslate = { showTranslate = true },
-                        onVerify = openVerify,
-                        overlay = false,
+                            )
+                        },
                     )
                 }
             }
@@ -441,14 +433,16 @@ fun HomeScreen(nav: NavHostController) {
             }
             rows.forEach { row ->
                 item(key = row.key.ifBlank { "${row.providerName}|${row.title}" }) {
-                    MediaRow(
+                    HikariCatalogShelf(
                         title = row.title,
-                        providerName = row.providerName,
                         items = row.items,
                         onClick = { item ->
                             Routes.safeNavigate(
                                 nav,
-                                Routes.detail(item.providerId, item.type, item.id, item.title, item.posterUrl, item.rawType)
+                                Routes.detail(
+                                    item.providerId, item.type, item.id,
+                                    item.title, item.posterUrl, item.rawType
+                                )
                             )
                         },
                         onShowAll = {
@@ -459,7 +453,7 @@ fun HomeScreen(nav: NavHostController) {
                                     row.providerName, row.type, row.rawType
                                 )
                             )
-                        }
+                        },
                     )
                 }
             }
@@ -738,63 +732,53 @@ private fun HomeHeader(
     onSearch: () -> Unit,
     onTranslate: () -> Unit,
     onVerify: () -> Unit,
-    overlay: Boolean,
-    modifier: Modifier = Modifier,
+    onProviderPicker: () -> Unit,
 ) {
-    val accent = MaterialTheme.colorScheme.primary
-    val iconTint = if (overlay) Color.White else accent
-    val subtitleColor =
-        if (overlay) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        modifier
+        Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 22.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                "Hikari",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = accent,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-            Text(
-                "Every stream, one place.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = subtitleColor,
-                modifier = Modifier.padding(horizontal = 8.dp)
+        IconButton(onClick = onProviderPicker) {
+            Icon(
+                Icons.Filled.List,
+                contentDescription = "Choose extension",
+                tint = Color(0xFFD8D8D2),
+                modifier = Modifier.size(28.dp),
             )
         }
+        Text(
+            "光  HIKARI",
+            modifier = Modifier.weight(1f),
+            color = Color(0xFFEDEDE9),
+            fontSize = 15.sp,
+            letterSpacing = 4.sp,
+            fontWeight = FontWeight.Medium,
+        )
         IconButton(onClick = onSearch) {
-            Icon(Icons.Filled.Search, contentDescription = "Search", tint = iconTint)
+            Text(
+                "+",
+                color = Color(0xFFEDEDE9),
+                fontSize = 30.sp,
+                fontWeight = FontWeight.Light,
+            )
         }
-        // Translate: per-extension toggle — turns this extension's titles/text
-        // into English inside the app. Shown whenever a provider is selected.
-        selected?.let { pid ->
-            val translateOn = com.hikari.app.data.Translator.isOn(pid)
-            IconButton(onClick = onTranslate) {
-                Text(
-                    "A\u3042",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = when {
-                        translateOn -> accent
-                        overlay -> Color.White.copy(alpha = 0.7f)
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
-            }
-        }
-        // Cloudflare/verify: opens the extension's site in the WebView so the
-        // user can pass a WAF check once; the catalog reloads by itself after.
         if (selected != null) {
             IconButton(onClick = onVerify) {
                 Icon(
                     Icons.Filled.Public,
-                    contentDescription = "Open site in web view (Cloudflare verification)",
-                    tint = iconTint
+                    contentDescription = "Verify extension site",
+                    tint = Color(0xFFB9B9B3),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            IconButton(onClick = onTranslate) {
+                Text(
+                    "···",
+                    color = Color(0xFFB9B9B3),
+                    fontSize = 18.sp,
+                    letterSpacing = 2.sp,
                 )
             }
         }
