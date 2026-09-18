@@ -503,34 +503,6 @@ fun HomeScreen(nav: NavHostController) {
             }
         }
 
-        // Floating source pill (Anikoto-style): shows the current provider and
-        // opens the picker sheet. Sits above the bottom nav bar.
-        Surface(
-            onClick = { showPicker = true },
-            shape = RoundedCornerShape(50),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-        ) {
-            Row(
-                Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Filled.List,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    "  ${selectedName ?: "All providers"}",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
     }
 
     if (showPicker) {
