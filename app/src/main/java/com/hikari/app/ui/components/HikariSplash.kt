@@ -49,7 +49,10 @@ fun HikariSplash(onFinished: () -> Unit) {
     val wordmark by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
-        animationSpec = tween(700, easing = FastOutSlowInEasing),
+        animationSpec = infiniteRepeatable(
+            animation = tween(700, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
         label = "wordmark"
     )
 
