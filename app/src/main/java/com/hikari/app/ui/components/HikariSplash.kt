@@ -6,113 +6,88 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hikari.app.R
 import kotlinx.coroutines.delay
 
 @Composable
 fun HikariSplash(onFinished: () -> Unit) {
-    var finished by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        delay(2800)
-        if (!finished) onFinished()
+        delay(2200)
+        onFinished()
     }
 
     val transition = rememberInfiniteTransition(label = "hikari_splash")
-    val beam by transition.animateFloat(
-        initialValue = -22f,
-        targetValue = 22f,
+    val glow by transition.animateFloat(
+        initialValue = 0.82f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = FastOutSlowInEasing),
+            animation = tween(1200, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "beam"
-    )
-    val batX by transition.animateFloat(
-        initialValue = -18f,
-        targetValue = 118f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "bat"
+        label = "glow"
     )
     val wordmark by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, delayMillis = 1250),
-            repeatMode = RepeatMode.Reverse
-        ),
+        animationSpec = tween(700, easing = FastOutSlowInEasing),
         label = "wordmark"
     )
 
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF050505))
+            .background(Color(0xFF0A0A0A)),
+        contentAlignment = Alignment.Center
     ) {
         Box(
             Modifier
-                .fillMaxSize()
-                .offset(x = beam.dp)
+                .size(230.dp)
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(Color.White.copy(alpha = 0.11f), Color.Transparent),
-                        radius = 520f
+                        colors = listOf(
+                            Color(0xFF7B5CFF).copy(alpha = 0.06f * glow),
+                            Color(0xFF38BDF8).copy(alpha = 0.025f * glow),
+                            Color.Transparent
+                        )
                     )
                 )
         )
 
-        Canvas(Modifier.fillMaxSize()) {
-            val base = size.height * 0.82f
-            var x = 0f
-            var i = 0
-            while (x < size.width) {
-                val width = size.width / 14f
-                val height = size.height * (0.07f + (i % 5) * 0.025f)
-                drawRect(
-                    color = Color(0xFF101010),
-                    topLeft = Offset(x, base - height),
-                    size = androidx.compose.ui.geometry.Size(width - 3f, height)
-                )
-                x += width
-                i++
-            }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Image(
+                painter = painterResource(R.drawable.ic_launcher_foreground),
+                contentDescription = "HIKARI",
+                modifier = Modifier
+                    .size(150.dp)
+                    .alpha(glow)
+            )
+            Spacer(Modifier.height(18.dp))
+            Text(
+                text = "光  HIKARI",
+                color = Color.White.copy(alpha = wordmark),
+                fontSize = 22.sp,
+                letterSpacing = 5.sp
+            )
         }
-
-        Text(
-            "🦇",
-            color = Color.White.copy(alpha = 0.8f),
-            fontSize = 30.sp,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .offset(x = batX.dp, y = 150.dp)
-        )
-
-        Text(
-            "光  HIKARI",
-            color = Color.White.copy(alpha = wordmark),
-            fontSize = 24.sp,
-            letterSpacing = 5.sp,
-            modifier = Modifier.align(Alignment.Center)
-        )
     }
 }
