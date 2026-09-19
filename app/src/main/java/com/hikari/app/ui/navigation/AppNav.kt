@@ -199,6 +199,7 @@ object Routes {
     fun safeNavigate(nav: NavHostController, route: String) {
         runCatching { nav.navigate(route) }
     }
+}
 
 @Composable
 private fun AppBottomBar(
@@ -554,6 +555,4 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
         )
     }
     }
-}
-
 }
