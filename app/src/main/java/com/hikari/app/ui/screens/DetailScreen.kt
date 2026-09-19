@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.AbsoluteCutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -1164,84 +1165,17 @@ fun DetailScreen(
                 LazyColumn(Modifier.fillMaxSize()) {
                     item {
                     Column(Modifier.padding(horizontal = 16.dp)) {
-                        Text(
-                            m?.title ?: title,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (m?.year != null) {
-                            Text(
-                                "${m.year}  ·  ${m.type.name.lowercase()}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
                         if (!m?.genres.isNullOrEmpty()) {
-                            Row(
-                                Modifier.padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
+                            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 m!!.genres.take(4).forEach { g ->
-                                    // Tapping a tag asks WHERE to search:
-                                    // "Search" stays inside this title's own
-                                    // extension, "Global search" fans out to
-                                    // every installed provider. Keeping both on
-                                    // the pill means one tap is still enough to
-                                    // discover the choice, without hijacking the
-                                    // tap to a single behaviour.
-                                    var tagOpen by remember { mutableStateOf(false) }
-                                    Box {
-                                        Row(
-                                            Modifier
-                                                .clip(RoundedCornerShape(20.dp))
-                                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                                .clickable { tagOpen = true }
-                                                .padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                g,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                            Spacer(Modifier.width(2.dp))
-                                            Icon(
-                                                Icons.Filled.ArrowDropDown,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                        DropdownMenu(
-                                            expanded = tagOpen,
-                                            onDismissRequest = { tagOpen = false }
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text("Search") },
-                                                leadingIcon = {
-                                                    Icon(Icons.Filled.Search, contentDescription = null)
-                                                },
-                                                onClick = {
-                                                    tagOpen = false
-                                                    Routes.safeNavigate(
-                                                        nav,
-                                                        Routes.searchInProvider(livePid, g)
-                                                    )
-                                                }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Global search") },
-                                                leadingIcon = {
-                                                    Icon(Icons.Filled.Public, contentDescription = null)
-                                                },
-                                                onClick = {
-                                                    tagOpen = false
-                                                    Routes.safeNavigate(nav, Routes.searchQuery(g))
-                                                }
-                                            )
-                                        }
-                                    }
+                                    Text(
+                                        g.uppercase(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.White.copy(alpha = 0.82f),
+                                        modifier = Modifier
+                                            .border(0.5.dp, Color.White.copy(alpha = 0.30f))
+                                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                                    )
                                 }
                             }
                         }
@@ -1913,44 +1847,38 @@ private fun playerPayload(streams: List<StreamSource>): String? = runCatching {
 
 @Composable
 private fun Hero(meta: MediaItem?, fallbackPoster: String?, onBack: () -> Unit) {
-    // A wide 16:9 banner — the same shape as the Home carousel and the Nuvio
-    // detail page — instead of the old 240dp letterbox, which cropped the sides
-    // off wide art and showed a blurry poster strip instead. With a full
-    // 16:9 frame nothing is cut off at the top, and the bottom of the art fades
-    // into the page background.
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .aspectRatio(16f / 9f)
-    ) {
-        // Item's own backdrop → the wide art we looked up → its poster, so a
-        // title an extension left blank still gets a real banner here. The
-        // wide/poster distinction matters: a portrait poster is never
-        // centre-cropped into this 16:9 frame (that is what cut the art off).
-        val (img, wide) = meta?.let { Artwork.heroModel(it) }
-            ?: (PosterLoader.model(fallbackPoster) to false)
-        HeroArtwork(
-            model = img,
-            wide = wide,
-            modifier = Modifier.fillMaxSize(),
-        )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.55f to Color.Transparent,
-                        1f to MaterialTheme.colorScheme.background
-                    )
-                )
-        )
-        IconButton(onClick = onBack, modifier = Modifier.padding(4.dp)) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = Color.White
-            )
+    val title = meta?.title.orEmpty()
+    val metadata = buildString {
+        meta?.year?.let { append(it) }
+        meta?.type?.let {
+            if (isNotEmpty()) append("  ·  ")
+            append(if (it == MediaType.SERIES) "TV" else "MOVIE")
+        }
+    }
+    Box(Modifier.fillMaxWidth().height(430.dp).background(Color(0xFF050505))) {
+        val (img, wide) = meta?.let { Artwork.heroModel(it) } ?: (PosterLoader.model(fallbackPoster) to false)
+        HeroArtwork(model = img, wide = wide, modifier = Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+            0f to Color.Black.copy(alpha = 0.05f),
+            0.42f to Color.Black.copy(alpha = 0.10f),
+            0.72f to Color.Black.copy(alpha = 0.72f),
+            1f to Color(0xFF050505)
+        )))
+        IconButton(onClick = onBack, modifier = Modifier.padding(8.dp)) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+        }
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 18.dp, vertical = 24.dp)) {
+            Box(Modifier.width(52.dp).height(2.dp).background(Color.White))
+            Spacer(Modifier.height(10.dp))
+            if (title.isNotBlank()) {
+                Text(title.uppercase(), color = Color.White, fontSize = 28.sp, lineHeight = 32.sp,
+                    letterSpacing = 1.4.sp, fontWeight = FontWeight.Medium, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis)
+            }
+            if (metadata.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(metadata, color = Color.White.copy(alpha = 0.72f), fontSize = 10.sp, letterSpacing = 0.8.sp)
+            }
         }
     }
 }
