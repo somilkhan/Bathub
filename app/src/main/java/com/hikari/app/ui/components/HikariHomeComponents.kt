@@ -108,6 +108,7 @@ fun HikariFeaturedCarousel(items: List<MediaItem>, sourceName: String = "", onCl
 private fun HikariFeaturedCard(
     item: MediaItem,
     width: androidx.compose.ui.unit.Dp,
+    sourceName: String,
     onClick: () -> Unit,
 ) {
     Box(
