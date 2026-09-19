@@ -718,12 +718,7 @@ private fun HomeHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onProviderPicker) {
-            Icon(
-                Icons.Filled.Menu,
-                contentDescription = "Choose extension",
-                tint = Color.White,
-                modifier = Modifier.size(25.dp),
-            )
+            Icon(Icons.Filled.Menu, contentDescription = "Choose extension", tint = Color.White, modifier = Modifier.size(25.dp))
         }
         Text(
             "光  HIKARI",
@@ -734,13 +729,7 @@ private fun HomeHeader(
             fontWeight = FontWeight.Medium,
         )
         IconButton(onClick = onProfile) {
-            Icon(
-                Icons.Filled.AccountCircle,
-                contentDescription = "Profile",
-                tint = Color.White,
-                modifier = Modifier.size(28.dp),
-            )
+            Icon(Icons.Filled.AccountCircle, contentDescription = "Profile", tint = Color.White, modifier = Modifier.size(28.dp))
         }
     }
 }
-
