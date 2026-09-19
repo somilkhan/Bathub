@@ -64,6 +64,7 @@ import androidx.navigation.navArgument
 import com.hikari.app.HikariApp
 import com.hikari.app.data.MediaType
 import com.hikari.app.ui.screens.CatalogScreen
+import com.hikari.app.ui.components.HikariSplash
 import com.hikari.app.ui.screens.DetailScreen
 import com.hikari.app.ui.screens.DownloadsScreen
 import com.hikari.app.ui.screens.ExtensionsScreen
@@ -285,6 +286,7 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     // its base path.
     val tabRoute = Routes.tabBaseOf(currentRoute)
     val showBar = tabRoute in Tabs.map { it.route }
+    var showHikariSplash by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
 
     // The WebView's "Go to app home" menu item bumps this — landing on the
     // app's own Home tab (not the website's home page).
@@ -413,5 +415,8 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
             }
         }
         }
+    if (showHikariSplash) {
+        HikariSplash(onFinished = { showHikariSplash = false })
+    }
     }
 }
