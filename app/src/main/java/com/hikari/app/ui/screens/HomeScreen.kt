@@ -22,7 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -559,33 +558,6 @@ fun HomeScreen(nav: NavHostController) {
         )
     }
 
-    // Search scope chooser: global (every provider, with the provider chips to
-    // narrow it) or scoped to the extension whose catalog is on screen.
-    val searchSel = selected
-    if (showSearchDialog && searchSel != null) {
-        val pname = selectedName ?: "this extension"
-        AlertDialog(
-            onDismissRequest = { showSearchDialog = false },
-            title = { Text("Search") },
-            text = { Text("Search across every provider, or only inside $pname?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showSearchDialog = false
-                    openGlobalSearch()
-                }) {
-                    Text("Global search")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showSearchDialog = false
-                    Routes.safeNavigate(nav, Routes.searchInProvider(searchSel))
-                }) {
-                    Text("In $pname")
-                }
-            },
-        )
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
