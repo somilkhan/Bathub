@@ -376,6 +376,7 @@ fun HomeScreen(nav: NavHostController) {
                     Box(Modifier.fillMaxWidth()) {
                         HikariFeaturedCarousel(
                             items = featured,
+                            sourceName = rows.firstOrNull()?.providerName.orEmpty(),
                             onClick = { item ->
                                 Routes.safeNavigate(
                                     nav,
