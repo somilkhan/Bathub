@@ -198,7 +198,6 @@ object Routes {
 private fun AppBottomBar(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
-    onMore: () -> Unit,
 ) {
     val primary = Color(0xFFEDEDE8)
     val muted = Color(0xFF8C8C88)
@@ -225,7 +224,7 @@ private fun AppBottomBar(
                     Column(
                         Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(22.dp))
                             .background(if (selected) selectedSurface else Color.Transparent)
-                            .clickable { if (tab.route == MORE_ROUTE) onMore() else onNavigate(tab.route) },
+                            .clickable { onNavigate(tab.route) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
@@ -314,7 +313,6 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     // its base path.
     val tabRoute = Routes.tabBaseOf(currentRoute)
     val showBar = tabRoute in Tabs.map { it.route }
-    var showMoreSheet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showHikariSplash by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
 
     // The WebView's "Go to app home" menu item bumps this — landing on the
@@ -369,7 +367,6 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
                 AppBottomBar(
                     currentRoute = tabRoute,
                     onNavigate = { route -> Routes.navigateTab(nav, route) },
-                    onMore = { showMoreSheet = true },
                 )
             }
         }
@@ -446,39 +443,6 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
         }
         }
 
-        if (showMoreSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showMoreSheet = false },
-                containerColor = MaterialTheme.colorScheme.surface,
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        "MORE",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 12.sp,
-                        letterSpacing = 2.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                    MoreSheetItem("History") {
-                        showMoreSheet = false
-                        Routes.navigateTab(nav, Routes.HISTORY)
-                    }
-                    MoreSheetItem("Extensions") {
-                        showMoreSheet = false
-                        Routes.safeNavigate(nav, Routes.EXTENSIONS)
-                    }
-                    MoreSheetItem("Settings") {
-                        showMoreSheet = false
-                        Routes.safeNavigate(nav, Routes.SETTINGS)
-                    }
-                    Spacer(Modifier.height(18.dp))
-                }
-            }
-        }
     if (showHikariSplash) {
         HikariSplash(onFinished = { showHikariSplash = false })
     }
