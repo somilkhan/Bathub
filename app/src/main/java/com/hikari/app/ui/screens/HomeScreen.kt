@@ -59,6 +59,7 @@ import com.hikari.app.data.CatalogRow
 import com.hikari.app.data.ContentRepository
 import com.hikari.app.data.Logs
 import com.hikari.app.data.MediaItem
+import com.hikari.app.data.HikariProfile
 import com.hikari.app.data.ProviderType
 import com.hikari.app.ui.PosterLoader
 import com.hikari.app.ui.components.ContinueWatchingRow
@@ -227,6 +228,8 @@ fun HomeScreen(nav: NavHostController) {
     var showPicker by remember { mutableStateOf(false) }
     var showTranslate by remember { mutableStateOf(false) }
     var showProfilePicker by remember { mutableStateOf(false) }
+    var showAddProfile by remember { mutableStateOf(false) }
+    var newProfileName by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     // Cloudflare verification: when the selected extension's site is blocked
@@ -244,6 +247,9 @@ fun HomeScreen(nav: NavHostController) {
     }
 
     val app = context.applicationContext as HikariApp
+    val profileStore = app.store
+    val profiles by remember { profileStore.profilesFlow() }.collectAsState(initial = emptyList())
+    val activeProfileId by remember { profileStore.activeProfileFlow() }.collectAsState(initial = "")
     // Continue Watching: history entries that were meaningfully started and
     // aren't within a minute of the end (those read as finished), newest first.
     // IMPORTANT: remember the Flow instances. Building `store.historyFlow()`
@@ -494,26 +500,59 @@ fun HomeScreen(nav: NavHostController) {
 
     if (showProfilePicker) {
         ModalBottomSheet(onDismissRequest = { showProfilePicker = false }) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 10.dp)) {
-                Text("WHO'S WATCHING?", color = Color(0xFF969691), fontSize = 11.sp, letterSpacing = 2.sp)
-                androidx.compose.material3.ListItem(
-                    headlineContent = { Text("Main profile", fontWeight = FontWeight.Medium) },
-                    supportingContent = { Text("Current profile") },
-                    leadingContent = { Icon(Icons.Filled.AccountCircle, contentDescription = null, modifier = Modifier.size(38.dp)) },
-                )
-                HorizontalDivider(color = Color(0xFF2B2B29))
-                androidx.compose.material3.ListItem(
-                    headlineContent = { Text("Add profile") },
-                    leadingContent = { Text("+", fontSize = 28.sp, color = Color(0xFF969691)) },
-                )
-                androidx.compose.material3.ListItem(
-                    headlineContent = { Text("Manage profiles") },
-                    leadingContent = { Icon(Icons.Filled.Menu, contentDescription = null) },
-                )
+            Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 12.dp)) {
+                Text("WHO’S WATCHING?", color = Color(0xFF969691), fontSize = 11.sp, letterSpacing = 2.sp)
+                Spacer(Modifier.size(10.dp))
+                profiles.forEach { profile ->
+                    Surface(
+                        onClick = { scope.launch { profileStore.setActiveProfile(profile.id); showProfilePicker = false } },
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (profile.id == activeProfileId) Color(0xFF1B1B1A) else Color.Transparent,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    ) {
+                        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Color(profile.avatarBackground)), contentAlignment = Alignment.Center) {
+                                Text(profile.name.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.SemiBold)
+                            }
+                            Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                                Text(profile.name, fontWeight = FontWeight.Medium)
+                                if (profile.id == activeProfileId) Text("CURRENT PROFILE", color = Color(0xFF8F8F8A), fontSize = 9.sp, letterSpacing = 1.sp)
+                            }
+                            if (profile.id == activeProfileId) Icon(Icons.Filled.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+                HorizontalDivider(color = Color(0xFF2B2B29), modifier = Modifier.padding(vertical = 8.dp))
+                Surface(onClick = { showAddProfile = true }, shape = RoundedCornerShape(14.dp), color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Add, contentDescription = null, tint = Color(0xFF969691), modifier = Modifier.size(28.dp))
+                        Text("Add profile", modifier = Modifier.padding(start = 12.dp))
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
             }
         }
     }
-
+    if (showAddProfile) {
+        AlertDialog(
+            onDismissRequest = { showAddProfile = false },
+            title = { Text("Create profile") },
+            text = { OutlinedTextField(value = newProfileName, onValueChange = { newProfileName = it.take(32) }, singleLine = true, label = { Text("Name") }) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = newProfileName.trim()
+                    if (name.isNotEmpty()) scope.launch {
+                        val p = profileStore.addProfile(name)
+                        profileStore.setActiveProfile(p.id)
+                        newProfileName = ""
+                        showAddProfile = false
+                        showProfilePicker = false
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showAddProfile = false }) { Text("Cancel") } },
+        )
+    }
     if (showPicker) {
         ProviderPickerSheet(
             providers = activeProviders,
