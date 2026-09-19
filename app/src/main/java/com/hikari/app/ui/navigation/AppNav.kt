@@ -2,6 +2,7 @@ package com.hikari.app.ui.navigation
 
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
