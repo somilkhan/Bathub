@@ -65,7 +65,7 @@ private val HikariLine = Color(0xFF444440)
 private val HikariCutShape = AbsoluteCutCornerShape(bottomRight = 12.dp)
 
 @Composable
-fun HikariFeaturedCarousel(items: List<MediaItem>, onClick: (MediaItem) -> Unit) {
+fun HikariFeaturedCarousel(items: List<MediaItem>, sourceName: String = "", onClick: (MediaItem) -> Unit) {
     val slides = remember(items) {
         items.distinctBy { "${it.providerId}|${it.type}|${it.id}" }.take(8)
     }
@@ -98,7 +98,7 @@ fun HikariFeaturedCarousel(items: List<MediaItem>, onClick: (MediaItem) -> Unit)
                 slides,
                 key = { _, item -> "${item.providerId}|${item.type}|${item.id}" }
             ) { _, item ->
-                HikariFeaturedCard(item, pageWidth) { onClick(item) }
+                HikariFeaturedCard(item, pageWidth, sourceName) { onClick(item) }
             }
         }
     }
@@ -197,7 +197,7 @@ private fun HikariFeaturedCard(
             }
             Spacer(Modifier.height(13.dp))
             Text(
-                "SOURCE  ${item.providerId.uppercase()}",
+                "SOURCE  " + sourceName.ifBlank { "UNKNOWN" }.uppercase(),
                 color = HikariMuted,
                 fontSize = 9.sp,
                 letterSpacing = 1.1.sp,
@@ -207,7 +207,7 @@ private fun HikariFeaturedCard(
             )
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HikariActionButton("PLAY", true, Icons.Outlined.PlayArrow, onClick, Modifier.width(104.dp))
+                HikariActionButton("PLAY", true, Icons.Outlined.PlayArrow, onClick, Modifier.size(width = 48.dp, height = 38.dp))
                 HikariActionButton("SEE MORE", false, Icons.Outlined.ArrowForward, onClick, Modifier.width(128.dp))
             }
         }
@@ -325,12 +325,13 @@ private fun HikariActionButton(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (primary) {
-                Text("🦇", color = HikariWhite.copy(alpha = 0.18f), fontSize = 17.sp)
-                Spacer(Modifier.width(2.dp))
+                Text("🦇", color = HikariWhite.copy(alpha = 0.20f), fontSize = 16.sp)
+                Icon(icon, contentDescription = null, tint = HikariWhite, modifier = Modifier.size(17.dp))
+            } else {
+                Icon(icon, contentDescription = null, tint = HikariWhite, modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(7.dp))
+                Text(text, color = HikariWhite, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Medium)
             }
-            Icon(icon, contentDescription = null, tint = HikariWhite, modifier = Modifier.size(17.dp))
-            Spacer(Modifier.width(7.dp))
-            Text(text, color = HikariWhite, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -435,7 +436,7 @@ private fun HikariPosterCard(
             )
             item.year?.let {
                 Text(
-                    "YEAR  \${it}",
+                    "YEAR  $it",
                     color = HikariMuted,
                     fontSize = 9.sp,
                     letterSpacing = 0.5.sp,
