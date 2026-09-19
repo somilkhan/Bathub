@@ -25,13 +25,9 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -39,7 +35,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ListItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -200,8 +195,6 @@ object Routes {
 private fun AppBottomBar(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
-    onMore: () -> Unit,
-    moreSelected: Boolean,
 ) {
     val primary = Color(0xFFEDEDE8)
     val muted = Color(0xFF8C8C88)
@@ -263,43 +256,6 @@ private fun AppBottomBar(
                         }
                     }
                 }
-                Column(
-                    Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(22.dp))
-                        .background(if (moreSelected) selectedSurface else Color.Transparent)
-                        .clickable(onClick = onMore),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    AnimatedContent(
-                        targetState = moreSelected,
-                        transitionSpec = {
-                            (fadeIn() + scaleIn(initialScale = 0.78f)).togetherWith(fadeOut())
-                        },
-                        label = "nav_more_icon"
-                    ) { active ->
-                        Icon(
-                            Icons.Filled.MoreHoriz,
-                            contentDescription = "More",
-                            modifier = Modifier.size(if (active) 22.dp else 20.dp),
-                            tint = if (active) primary else muted
-                        )
-                    }
-                    AnimatedVisibility(
-                        visible = moreSelected,
-                        enter = fadeIn() + scaleIn(initialScale = 0.86f),
-                        exit = fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.86f),
-                        label = "nav_more_label"
-                    ) {
-                        Text(
-                            "MORE",
-                            fontSize = 8.sp,
-                            letterSpacing = 0.8.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = primary,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
-                }
             }
         }
     }
@@ -328,8 +284,7 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     // tab (so the bar shows and Search highlights); everything else matches on
     // its base path.
     val tabRoute = Routes.tabBaseOf(currentRoute)
-    val showBar = tabRoute in Tabs.map { it.route } || tabRoute in listOf(Routes.HISTORY, Routes.EXTENSIONS, Routes.SETTINGS)
-    var showMore by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val showBar = tabRoute in Tabs.map { it.route }
 
     // The WebView's "Go to app home" menu item bumps this — landing on the
     // app's own Home tab (not the website's home page).
@@ -383,46 +338,7 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
                 AppBottomBar(
                     currentRoute = tabRoute,
                     onNavigate = { route -> Routes.navigateTab(nav, route) },
-                    onMore = { showMore = true },
-                    moreSelected = showMore,
                 )
-                if (showMore) {
-                    ModalBottomSheet(onDismissRequest = { showMore = false }) {
-                        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-                            Text(
-                                "MORE",
-                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                                color = Color(0xFF8C8C88),
-                                fontSize = 11.sp,
-                                letterSpacing = 2.sp,
-                            )
-                            ListItem(
-                                headlineContent = { Text("History") },
-                                leadingContent = { Icon(Icons.Filled.History, contentDescription = null) },
-                                modifier = Modifier.clickable {
-                                    showMore = false
-                                    Routes.navigateTab(nav, Routes.HISTORY)
-                                }
-                            )
-                            ListItem(
-                                headlineContent = { Text("Extensions") },
-                                leadingContent = { Icon(Icons.Filled.Extension, contentDescription = null) },
-                                modifier = Modifier.clickable {
-                                    showMore = false
-                                    Routes.navigateTab(nav, Routes.EXTENSIONS)
-                                }
-                            )
-                            ListItem(
-                                headlineContent = { Text("Settings") },
-                                leadingContent = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                                modifier = Modifier.clickable {
-                                    showMore = false
-                                    Routes.navigateTab(nav, Routes.SETTINGS)
-                                }
-                            )
-                        }
-                    }
-                }
             }
         }
     ) { padding ->
