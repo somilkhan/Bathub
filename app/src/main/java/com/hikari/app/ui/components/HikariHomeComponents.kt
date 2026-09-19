@@ -197,7 +197,7 @@ private fun HikariFeaturedCard(
             }
             Spacer(Modifier.height(13.dp))
             Text(
-                "SOURCE  \${item.providerId.uppercase()}",
+                "SOURCE  ${item.providerId.uppercase()}",
                 color = HikariMuted,
                 fontSize = 9.sp,
                 letterSpacing = 1.1.sp,
