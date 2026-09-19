@@ -40,7 +40,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -295,10 +297,13 @@ private fun HikariPosterCard(
         if (rank != null) {
             Text(
                 rank.toString(),
-                color = HikariMuted.copy(alpha = 0.18f),
-                fontSize = 58.sp,
-                lineHeight = 58.sp,
-                fontWeight = FontWeight.Bold,
+                style = TextStyle(
+                    color = Color.Transparent,
+                    fontSize = 58.sp,
+                    lineHeight = 58.sp,
+                    fontWeight = FontWeight.Bold,
+                    drawStyle = Stroke(width = 1.5f),
+                ),
                 modifier = Modifier.width(34.dp),
             )
         }
