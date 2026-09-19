@@ -98,7 +98,7 @@ fun HikariFeaturedCarousel(items: List<MediaItem>, onClick: (MediaItem) -> Unit)
                 slides,
                 key = { _, item -> "${item.providerId}|${item.type}|${item.id}" }
             ) { _, item ->
-                HikariFeaturedCard(item, pageWidth, onClick)
+                HikariFeaturedCard(item, pageWidth) { onClick(item) }
             }
         }
     }
