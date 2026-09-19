@@ -19,13 +19,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -229,8 +225,7 @@ fun HomeScreen(nav: NavHostController) {
     var showCrash by remember { mutableStateOf(HikariApp.lastCrash != null) }
     var showPicker by remember { mutableStateOf(false) }
     var showTranslate by remember { mutableStateOf(false) }
-    var showSearchDialog by remember { mutableStateOf(false) }
-    var showMoreActions by remember { mutableStateOf(false) }
+    var showProfilePicker by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     // Cloudflare verification: when the selected extension's site is blocked
@@ -290,16 +285,6 @@ fun HomeScreen(nav: NavHostController) {
     val featured = remember(rows) {
         val first = rows.firstOrNull()?.items.orEmpty()
         (first.filter { !it.backdropUrl.isNullOrBlank() }.ifEmpty { first }).take(8)
-    }
-    val openGlobalSearch: () -> Unit = {
-        Routes.navigateTab(nav, Routes.SEARCH)
-    }
-    // Tapping the header search icon asks HOW to search when a specific
-    // extension's catalog is being browsed: globally across every provider, or
-    // scoped to the extension you're looking at. With no extension selected
-    // there's only one sensible answer, so it goes straight to global search.
-    val openSearch: () -> Unit = {
-        if (selected != null) showSearchDialog = true else openGlobalSearch()
     }
     val openVerify: () -> Unit = {
         scope.launch {
@@ -402,7 +387,7 @@ fun HomeScreen(nav: NavHostController) {
                         )
                         HomeHeader(
                             onProviderPicker = { showPicker = true },
-                            onMore = { showMoreActions = true },
+                            onProfile = { showProfilePicker = true },
                             modifier = Modifier.align(Alignment.TopCenter),
                         )
                     }
@@ -505,6 +490,28 @@ fun HomeScreen(nav: NavHostController) {
 
     }
 
+    if (showProfilePicker) {
+        ModalBottomSheet(onDismissRequest = { showProfilePicker = false }) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 10.dp)) {
+                Text("WHO'S WATCHING?", color = Color(0xFF969691), fontSize = 11.sp, letterSpacing = 2.sp)
+                androidx.compose.material3.ListItem(
+                    headlineContent = { Text("Main profile", fontWeight = FontWeight.Medium) },
+                    supportingContent = { Text("Current profile") },
+                    leadingContent = { Icon(Icons.Filled.AccountCircle, contentDescription = null, modifier = Modifier.size(38.dp)) },
+                )
+                HorizontalDivider(color = Color(0xFF2B2B29))
+                androidx.compose.material3.ListItem(
+                    headlineContent = { Text("Add profile") },
+                    leadingContent = { Text("+", fontSize = 28.sp, color = Color(0xFF969691)) },
+                )
+                androidx.compose.material3.ListItem(
+                    headlineContent = { Text("Manage profiles") },
+                    leadingContent = { Icon(Icons.Filled.Menu, contentDescription = null) },
+                )
+            }
+        }
+    }
+
     if (showPicker) {
         ProviderPickerSheet(
             providers = activeProviders,
@@ -550,21 +557,6 @@ fun HomeScreen(nav: NavHostController) {
                 TextButton(onClick = { showTranslate = false }) { Text("Cancel") }
             },
         )
-    }
-
-    if (showMoreActions) {
-        ModalBottomSheet(onDismissRequest = { showMoreActions = false }) {
-            Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-                Text("MORE", modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp), color = Color(0xFF8C8C88), fontSize = 11.sp, letterSpacing = 2.sp)
-                if (selected != null) {
-                    androidx.compose.material3.ListItem(headlineContent = { Text("Translate") }, leadingContent = { Icon(Icons.Filled.Public, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; showTranslate = true })
-                    androidx.compose.material3.ListItem(headlineContent = { Text("Verify site") }, leadingContent = { Icon(Icons.Filled.Check, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; openVerify() })
-                }
-                androidx.compose.material3.ListItem(headlineContent = { Text("History") }, leadingContent = { Icon(androidx.compose.material.icons.Icons.Filled.History, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; Routes.navigateTab(nav, Routes.HISTORY) })
-                androidx.compose.material3.ListItem(headlineContent = { Text("Extensions") }, leadingContent = { Icon(androidx.compose.material.icons.Icons.Filled.Extension, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; Routes.navigateTab(nav, Routes.EXTENSIONS) })
-                androidx.compose.material3.ListItem(headlineContent = { Text("Settings") }, leadingContent = { Icon(Icons.Filled.List, contentDescription = null) }, modifier = Modifier.clickable { showMoreActions = false; Routes.navigateTab(nav, Routes.SETTINGS) })
-            }
-        }
     }
 
     // Search scope chooser: global (every provider, with the provider chips to
@@ -718,7 +710,7 @@ private fun webUrlFor(p: ContentProvider): String? = when (p.config.type) {
 @Composable
 private fun HomeHeader(
     onProviderPicker: () -> Unit,
-    onMore: () -> Unit,
+    onProfile: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -726,7 +718,12 @@ private fun HomeHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onProviderPicker) {
-            Icon(Icons.Filled.List, contentDescription = "Choose extension", tint = Color.White, modifier = Modifier.size(27.dp))
+            Icon(
+                Icons.Filled.Menu,
+                contentDescription = "Choose extension",
+                tint = Color.White,
+                modifier = Modifier.size(25.dp),
+            )
         }
         Text(
             "光  HIKARI",
@@ -736,8 +733,14 @@ private fun HomeHeader(
             letterSpacing = 4.sp,
             fontWeight = FontWeight.Medium,
         )
-        IconButton(onClick = onMore) {
-            Text("⋯", color = Color.White, fontSize = 24.sp, letterSpacing = 1.sp)
+        IconButton(onClick = onProfile) {
+            Icon(
+                Icons.Filled.AccountCircle,
+                contentDescription = "Profile",
+                tint = Color.White,
+                modifier = Modifier.size(28.dp),
+            )
         }
     }
 }
+
