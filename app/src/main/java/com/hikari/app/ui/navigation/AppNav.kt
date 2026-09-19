@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -199,6 +201,7 @@ private fun AppBottomBar(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
     onMore: () -> Unit,
+    moreSelected: Boolean,
 ) {
     val primary = Color(0xFFEDEDE8)
     val muted = Color(0xFF8C8C88)
@@ -212,24 +215,18 @@ private fun AppBottomBar(
         Surface(
             shape = RoundedCornerShape(30.dp),
             color = Color(0xF0141413),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF30302E)),
+            border = BorderStroke(1.dp, Color(0xFF30302E)),
             shadowElevation = 0.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(62.dp)
-                    .padding(horizontal = 5.dp, vertical = 6.dp),
+                Modifier.fillMaxWidth().height(62.dp).padding(horizontal = 5.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Tabs.forEach { tab ->
                     val selected = currentRoute == tab.route
                     Column(
-                        Modifier
-                            .weight(1f)
-                            .height(50.dp)
-                            .clip(RoundedCornerShape(22.dp))
+                        Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(22.dp))
                             .background(if (selected) selectedSurface else Color.Transparent)
                             .clickable { onNavigate(tab.route) },
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -237,50 +234,71 @@ private fun AppBottomBar(
                     ) {
                         AnimatedContent(
                             targetState = selected,
-                            transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.82f)).togetherWith(fadeOut()) },
-                            label = "nav_icon"
+                            transitionSpec = {
+                                (fadeIn() + scaleIn(initialScale = 0.78f)).togetherWith(fadeOut())
+                            },
+                            label = "nav_icon_\${tab.label}"
                         ) { active ->
                             Icon(
                                 tab.icon,
                                 contentDescription = tab.label,
-                                modifier = Modifier.size(if (active) 22.dp else 21.dp),
+                                modifier = Modifier.size(if (active) 21.dp else 20.dp),
                                 tint = if (active) primary else muted
                             )
                         }
-                        Spacer(Modifier.height(3.dp))
-                        Text(
-                            tab.label.uppercase(),
-                            maxLines = 1,
-                            softWrap = false,
-                            fontSize = 9.sp,
-                            letterSpacing = 0.8.sp,
-                            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                            color = if (selected) primary else muted,
-                        )
+                        AnimatedVisibility(
+                            visible = selected,
+                            enter = fadeIn() + scaleIn(initialScale = 0.86f),
+                            exit = fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.86f),
+                            label = "nav_label_\${tab.label}"
+                        ) {
+                            Text(
+                                tab.label.uppercase(),
+                                fontSize = 8.sp,
+                                letterSpacing = 0.8.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = primary,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
                     }
                 }
                 Column(
-                    Modifier
-                        .weight(1f)
-                        .height(50.dp)
-                        .clip(RoundedCornerShape(22.dp))
+                    Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(22.dp))
+                        .background(if (moreSelected) selectedSurface else Color.Transparent)
                         .clickable(onClick = onMore),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = "More",
-                        modifier = Modifier.size(21.dp),
-                        tint = muted
-                    )
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        "MORE",
-                        fontSize = 9.sp,
-                        letterSpacing = 0.8.sp,
-                        color = muted,
-                    )
+                    AnimatedContent(
+                        targetState = moreSelected,
+                        transitionSpec = {
+                            (fadeIn() + scaleIn(initialScale = 0.78f)).togetherWith(fadeOut())
+                        },
+                        label = "nav_more_icon"
+                    ) { active ->
+                        Icon(
+                            Icons.Filled.MoreHoriz,
+                            contentDescription = "More",
+                            modifier = Modifier.size(if (active) 22.dp else 20.dp),
+                            tint = if (active) primary else muted
+                        )
+                    }
+                    AnimatedVisibility(
+                        visible = moreSelected,
+                        enter = fadeIn() + scaleIn(initialScale = 0.86f),
+                        exit = fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.86f),
+                        label = "nav_more_label"
+                    ) {
+                        Text(
+                            "MORE",
+                            fontSize = 8.sp,
+                            letterSpacing = 0.8.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = primary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
                 }
             }
         }
@@ -366,6 +384,7 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
                     currentRoute = tabRoute,
                     onNavigate = { route -> Routes.navigateTab(nav, route) },
                     onMore = { showMore = true },
+                    moreSelected = showMore,
                 )
                 if (showMore) {
                     ModalBottomSheet(onDismissRequest = { showMore = false }) {
