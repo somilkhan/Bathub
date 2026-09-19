@@ -368,18 +368,6 @@ private fun MoreSheetItem(
     }
 }
 
-@Composable
-private fun MoreSheetItem(label: String, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-    ) {
-        Text(label.uppercase(), color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp,
-            letterSpacing = 1.2.sp, fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 17.dp))
-    }
-}
 
 private data class Tab(
     val route: String,
@@ -413,14 +401,13 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     var showProfilePicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showAddProfile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var newProfileName by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    // The WebView's "Go to app home" menu item bumps this — landing on the
+    // app's own Home tab (not the website's home page).
+    val context = LocalContext.current
     val profileStore = (context.applicationContext as HikariApp).store
     val profileFlow = androidx.compose.runtime.remember { profileStore.profilesFlow() }
     val profiles by profileFlow.collectAsState(initial = emptyList())
     val profileScope = rememberCoroutineScope()
-
-    // The WebView's "Go to app home" menu item bumps this — landing on the
-    // app's own Home tab (not the website's home page).
-    val context = LocalContext.current
     val homeRequest by (context.applicationContext as HikariApp).homeTabRequest.collectAsState()
     LaunchedEffect(Unit) {
         profileStore.ensureDefaultProfile()
