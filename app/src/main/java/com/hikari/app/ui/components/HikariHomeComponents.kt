@@ -1,5 +1,6 @@
 package com.hikari.app.ui.components
 
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -42,6 +44,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,7 +65,7 @@ private val HikariCutShape = AbsoluteCutCornerShape(bottomRight = 12.dp)
 @Composable
 fun HikariFeaturedCarousel(items: List<MediaItem>, onClick: (MediaItem) -> Unit) {
     val slides = remember(items) {
-        items.distinctBy { "\${it.providerId}|\${it.type}|\${it.id}" }.take(8)
+        items.distinctBy { "${it.providerId}|${it.type}|${it.id}" }.take(8)
     }
     if (slides.isEmpty()) return
 
@@ -91,7 +94,7 @@ fun HikariFeaturedCarousel(items: List<MediaItem>, onClick: (MediaItem) -> Unit)
         ) {
             itemsIndexed(
                 slides,
-                key = { _, item -> "\${item.providerId}|\${item.type}|\${item.id}" }
+                key = { _, item -> "${item.providerId}|${item.type}|${item.id}" }
             ) { _, item ->
                 HikariFeaturedCard(item, pageWidth, onClick)
             }
@@ -118,6 +121,7 @@ private fun HikariFeaturedCard(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
         )
+        HikariAmbientMotion()
         Box(
             Modifier
                 .fillMaxSize()
@@ -209,6 +213,97 @@ private fun HikariFeaturedCard(
 }
 
 @Composable
+private fun HikariAmbientMotion() {
+    val context = LocalContext.current
+    val reducedMotion = remember {
+        runCatching {
+            Settings.Global.getFloat(
+                context.contentResolver,
+                Settings.Global.ANIMATOR_DURATION_SCALE,
+                1f
+            ) == 0f
+        }.getOrDefault(false)
+    }
+    if (reducedMotion) return
+
+    val transition = rememberInfiniteTransition(label = "gotham_ambient")
+    val sweep by transition.animateFloat(
+        initialValue = -18f,
+        targetValue = 18f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(7000),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "searchlight"
+    )
+    val fog by transition.animateFloat(
+        initialValue = -24f,
+        targetValue = 24f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(9000),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+        ),
+        label = "fog"
+    )
+    val rain by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 46f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(1100)
+        ),
+        label = "rain"
+    )
+
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .offset(x = sweep.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(Color.White.copy(alpha = 0.075f), Color.Transparent),
+                        radius = 420f
+                    )
+                )
+        )
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .align(Alignment.BottomCenter)
+                .offset(x = fog.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(Color.White.copy(alpha = 0.055f), Color.Transparent),
+                        radius = 360f
+                    )
+                )
+        )
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val spacing = 22.dp.toPx()
+            val length = 14.dp.toPx()
+            var x = -size.height
+            while (x < size.width + size.height) {
+                val y = ((x + rain.dp.toPx()) % (size.height + 80.dp.toPx())) - 40.dp.toPx()
+                drawLine(
+                    color = Color.White.copy(alpha = 0.085f),
+                    start = Offset(x, y),
+                    end = Offset(x - length, y + length * 2.2f),
+                    strokeWidth = 1.dp.toPx()
+                )
+                x += spacing
+            }
+        }
+        Text(
+            "🦇",
+            color = Color.White.copy(alpha = 0.20f),
+            fontSize = 20.sp,
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 116.dp, end = 24.dp)
+        )
+    }
+}
+
+@Composable
 private fun HikariActionButton(
     text: String,
     primary: Boolean,
@@ -227,6 +322,10 @@ private fun HikariActionButton(
         contentAlignment = Alignment.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            if (primary) {
+                Text("🦇", color = HikariWhite.copy(alpha = 0.18f), fontSize = 17.sp)
+                Spacer(Modifier.width(2.dp))
+            }
             Icon(icon, contentDescription = null, tint = HikariWhite, modifier = Modifier.size(17.dp))
             Spacer(Modifier.width(7.dp))
             Text(text, color = HikariWhite, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Medium)
@@ -272,7 +371,7 @@ fun HikariCatalogShelf(
         ) {
             itemsIndexed(
                 items.take(12),
-                key = { index, item -> "\${item.providerId}|\${item.type}|\${item.id}|$index" }
+                key = { index, item -> "${item.providerId}|${item.type}|${item.id}|$index" }
             ) { index, item ->
                 HikariPosterCard(
                     item = item,
