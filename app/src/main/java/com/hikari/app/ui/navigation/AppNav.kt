@@ -559,5 +559,40 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     if (showHikariSplash) {
         HikariSplash(onFinished = { showHikariSplash = false; showProfilePicker = true })
     }
+    if (showProfilePicker && !showHikariSplash) {
+        HikariLaunchProfilePicker(
+            profiles = profiles,
+            onSelect = { profile -> profileScope.launch { profileStore.setActiveProfile(profile.id); showProfilePicker = false } },
+            onAdd = { showAddProfile = true },
+        )
+    }
+    if (showAddProfile) {
+        AlertDialog(
+            onDismissRequest = { showAddProfile = false },
+            title = { Text("Create profile") },
+            text = {
+                OutlinedTextField(
+                    value = newProfileName,
+                    onValueChange = { newProfileName = it.take(32) },
+                    singleLine = true,
+                    label = { Text("Name") },
+                    placeholder = { Text("Profile name") },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = newProfileName.trim()
+                    if (name.isNotEmpty()) profileScope.launch {
+                        val p = profileStore.addProfile(name)
+                        profileStore.setActiveProfile(p.id)
+                        newProfileName = ""
+                        showAddProfile = false
+                        showProfilePicker = false
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showAddProfile = false }) { Text("Cancel") } },
+        )
+    }
     }
 }
