@@ -30,11 +30,15 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
@@ -65,6 +69,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.hikari.app.HikariApp
 import com.hikari.app.data.MediaType
+import com.hikari.app.data.HikariProfile
 import com.hikari.app.ui.screens.CatalogScreen
 import com.hikari.app.ui.components.HikariSplash
 import com.hikari.app.ui.screens.DetailScreen
@@ -77,6 +82,7 @@ import com.hikari.app.ui.screens.SearchScreen
 import com.hikari.app.ui.screens.SettingsScreen
 import com.hikari.app.ui.theme.HikariThemeMode
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
 
 object Routes {
     const val HOME = "home"
@@ -191,6 +197,47 @@ object Routes {
     fun safeNavigate(nav: NavHostController, route: String) {
         runCatching { nav.navigate(route) }
     }
+    if (showProfilePicker && !showHikariSplash) {
+        HikariLaunchProfilePicker(
+            profiles = profiles,
+            onSelect = { profile ->
+                profileScope.launch {
+                    profileStore.setActiveProfile(profile.id)
+                    showProfilePicker = false
+                }
+            },
+            onAdd = { showAddProfile = true },
+        )
+    }
+
+    if (showAddProfile) {
+        AlertDialog(
+            onDismissRequest = { showAddProfile = false },
+            title = { Text("Create profile") },
+            text = {
+                OutlinedTextField(
+                    value = newProfileName,
+                    onValueChange = { newProfileName = it.take(32) },
+                    singleLine = true,
+                    label = { Text("Name") },
+                    placeholder = { Text("Profile name") },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = newProfileName.trim()
+                    if (name.isNotEmpty()) profileScope.launch {
+                        val p = profileStore.addProfile(name)
+                        profileStore.setActiveProfile(p.id)
+                        newProfileName = ""
+                        showAddProfile = false
+                        showProfilePicker = false
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showAddProfile = false }) { Text("Cancel") } },
+        )
+    }
 }
 
 
@@ -267,6 +314,40 @@ private fun AppBottomBar(
 
 
 @Composable
+private fun HikariLaunchProfilePicker(
+    profiles: List<HikariProfile>,
+    onSelect: (HikariProfile) -> Unit,
+    onAdd: () -> Unit,
+) {
+    Box(Modifier.fillMaxSize().background(Color(0xFF0A0A0A)), contentAlignment = Alignment.Center) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("WHO’S WATCHING?", color = Color(0xFFF1F1ED), fontSize = 13.sp, letterSpacing = 2.4.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(8.dp))
+            Text("Choose a profile to continue", color = Color(0xFF858581), fontSize = 12.sp)
+            Spacer(Modifier.height(34.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                profiles.forEach { profile ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(82.dp).clickable { onSelect(profile) }) {
+                        Box(Modifier.size(72.dp).clip(RoundedCornerShape(22.dp)).background(Color(profile.avatarBackground)), contentAlignment = Alignment.Center) {
+                            Text(profile.name.take(1).uppercase(), color = Color(0xFFF1F1ED), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Text(profile.name.uppercase(), color = Color(0xFFEDEDE8), fontSize = 9.sp, letterSpacing = 1.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(82.dp).clickable { onAdd() }) {
+                    Box(Modifier.size(72.dp).clip(RoundedCornerShape(22.dp)).background(Color(0xFF151515)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Add, contentDescription = "Add profile", tint = Color(0xFF8F8F8A), modifier = Modifier.size(28.dp))
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text("ADD PROFILE", color = Color(0xFF8F8F8A), fontSize = 9.sp, letterSpacing = 1.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun MoreSheetItem(
     label: String,
     onClick: () -> Unit,
@@ -329,11 +410,21 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     val showBar = tabRoute in Tabs.map { it.route }
     var showMoreSheet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showHikariSplash by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+    var showProfilePicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showAddProfile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var newProfileName by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    val profileStore = (context.applicationContext as HikariApp).store
+    val profileFlow = androidx.compose.runtime.remember { profileStore.profilesFlow() }
+    val profiles by profileFlow.collectAsState(initial = emptyList())
+    val profileScope = rememberCoroutineScope()
 
     // The WebView's "Go to app home" menu item bumps this — landing on the
     // app's own Home tab (not the website's home page).
     val context = LocalContext.current
     val homeRequest by (context.applicationContext as HikariApp).homeTabRequest.collectAsState()
+    LaunchedEffect(Unit) {
+        profileStore.ensureDefaultProfile()
+    }
     LaunchedEffect(homeRequest) {
         if (homeRequest > 0) Routes.navigateTab(nav, Routes.HOME)
     }
@@ -479,7 +570,7 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
             }
         }
     if (showHikariSplash) {
-        HikariSplash(onFinished = { showHikariSplash = false })
+        HikariSplash(onFinished = { showHikariSplash = false; showProfilePicker = true })
     }
     }
 }
