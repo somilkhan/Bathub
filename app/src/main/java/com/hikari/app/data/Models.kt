@@ -239,3 +239,14 @@ data class CatalogRow(
     val type: MediaType = MediaType.UNKNOWN,
     val rawType: String = "",
 )
+
+
+/** Netflix-style local viewing profile. Account-level extension state remains in AppStore;
+ *  profile-scoped content is keyed by [id]. */
+data class HikariProfile(
+    val id: String,
+    val name: String,
+    val avatarId: String = "orb",
+    val avatarBackground: Long = 0xFF202020,
+    val createdAt: Long = 0L,
+)
