@@ -19,6 +19,7 @@ import com.hikari.app.data.StreamSource
 import com.hikari.app.data.SubtitleSource
 import com.hikari.app.net.Http
 import com.lagradost.cloudstream3.CloudStreamApp
+import com.lagradost.cloudstream3.CommonActivity
 import com.lagradost.cloudstream3.ui.player.CS3IPlayer
 import com.lagradost.cloudstream3.ui.player.CSPlayerLoading
 import com.lagradost.cloudstream3.ui.player.ErrorEvent
@@ -392,8 +393,16 @@ class Cs3PlayerActivity : ComponentActivity() {
         com.hikari.app.data.Logs.log("Player", "CloudStreamPlayer: " + message)
     }
 
+    override fun onStart() {
+        super.onStart()
+        CommonActivity.setActivityInstance(this)
+    }
+
     override fun onStop() {
         cloudPlayer.onStop()
+        if (CommonActivity.activity === this) {
+            CommonActivity.setActivityInstance(null)
+        }
         super.onStop()
     }
 
