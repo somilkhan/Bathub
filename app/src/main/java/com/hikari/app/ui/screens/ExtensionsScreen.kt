@@ -620,31 +620,50 @@ class ExtensionsViewModel(app: Application) : AndroidViewModel(app) {
      *  raw-GitHub variants for `github.com/o/r` links users commonly paste (the
      *  HTML page would never parse as JSON). Remembers which variant succeeded. */
     private fun fetchRepoRaw(url: String, file: String = "repo.json", ua: String? = null): Result<String> {
-        // Nuvio manifests/scrapers live on Codeberg, which 403s the shared
-        // desktop-Chrome UA but serves the nuvio app's own UA fine — override
-        // for nuvio repos (mirrors the real nuvio app's client).
+        // Repo hosts sometimes return HTTP 200 with an HTML/WAF page. Http's
+        // generic fetcher correctly treats that as HTTP success, so explicitly
+        // reject HTML here and continue to the CDN/raw alternatives.
         val headers = if (ua != null) mapOf("User-Agent" to ua) else emptyMap()
-        val variants = repoUrlVariants(url, file)
-        if (variants.isEmpty()) {
-            lastGoodRepoUrl = url
-            return Http.fetchStringRobust(url, headers).map { text ->
-                if (looksLikeHtml(text)) throw friendlyRepoError(file) else text
+
+        fun fetchCandidate(candidate: String): Result<String> {
+            val first = Http.fetchStringRobust(candidate, headers)
+            if (first.isSuccess) {
+                val text = first.getOrNull().orEmpty()
+                if (!looksLikeHtml(text)) return Result.success(text)
             }
+
+            // GitHub raw can occasionally return a 200 HTML page even though the
+            // same file is available through jsDelivr. Try that mirror explicitly.
+            val gh = Regex("^https://raw\\.githubusercontent\\.com/([^/]+)/([^/]+)/([^/]+)/(.+)$")
+                .matchEntire(candidate)
+            if (gh != null) {
+                val cdn = "https://cdn.jsdelivr.net/gh/${gh.groupValues[1]}/${gh.groupValues[2]}@${gh.groupValues[3]}/${gh.groupValues[4]}"
+                val mirror = Http.fetchStringRobust(cdn, headers)
+                if (mirror.isSuccess) {
+                    val text = mirror.getOrNull().orEmpty()
+                    if (!looksLikeHtml(text)) return Result.success(text)
+                }
+            }
+
+            return Result.failure(Exception("Could not fetch $candidate"))
         }
+
+        val variants = repoUrlVariants(url, file)
         for (candidate in variants) {
-            val r = Http.fetchStringRobust(candidate, headers)
+            val r = fetchCandidate(candidate)
             if (r.isSuccess) {
-                val text = r.getOrNull() ?: continue
-                if (looksLikeHtml(text)) continue
                 lastGoodRepoUrl = candidate
                 return r
             }
         }
-        // last resort: the pasted URL as-is (a non-main/mixed-branch manifest)
-        lastGoodRepoUrl = url
-        return Http.fetchStringRobust(url, headers).map { text ->
-            if (looksLikeHtml(text)) throw friendlyRepoError(file) else text
+
+        // Last resort: the pasted URL as-is (a non-main/mixed-branch manifest).
+        val r = fetchCandidate(url)
+        if (r.isSuccess) {
+            lastGoodRepoUrl = url
+            return r
         }
+        return Result.failure(friendlyRepoError(file))
     }
 
     private fun looksLikeHtml(text: String): Boolean {
