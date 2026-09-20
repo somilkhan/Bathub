@@ -120,6 +120,8 @@ private class Cs3ApiRepository(private val api: MainAPI) {
 
 class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider {
 
+    private fun repository(a: MainAPI): Cs3ApiRepository = Cs3ApiRepository(a)
+
     companion object {
         /**
          * Per-provider last loadLinks failure (shown in the UI so users see the
@@ -419,7 +421,7 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
             }
         }
         val resp = try {
-            repository.getMainPage(pageNumber, page)
+            repository(a).getMainPage(pageNumber, page)
         } catch (e: Throwable) {
             if (e is CancellationException) throw e
             // A brand-new plugin instance can fail its very first network call
@@ -473,7 +475,7 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
                 return@withContext rowItems
             }
             val resp = try {
-                repository.getMainPage(page, MainPageData(ref.name, ref.id, false))
+                repository(a).getMainPage(page, MainPageData(ref.name, ref.id, false))
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
                 // A brand-new plugin instance can fail its very first network
@@ -559,10 +561,10 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
      *  calling the paginated form first is correct for BOTH generations. */
     private suspend fun searchItems(a: MainAPI, query: String, page: Int): List<SearchResponse> {
         return try {
-            repository.search(query, page)
+            repository(a).search(query, page)
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
-            repository.search(query, page)
+            repository(a).search(query, page)
         }
     }
 
@@ -733,7 +735,7 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
                         suspend fun runOnce(budget: Long, url: String) {
                             val s = System.currentTimeMillis()
                             completed = withTimeoutOrNull(budget) {
-                                repository.loadLinks(url, { subs.add(it) }, { links.add(it) })
+                                repository(a).loadLinks(url, { subs.add(it) }, { links.add(it) })
                             }
                             elapsedMs += System.currentTimeMillis() - s
                         }
@@ -1121,7 +1123,7 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
 
     /** One load() attempt, treating a plugin crash as a miss (never throwing). */
     private suspend fun tryLoad(a: MainAPI, id: String): LoadResponse? = try {
-        repository.load(id)
+        repository(a).load(id)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Throwable) {
