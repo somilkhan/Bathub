@@ -4,6 +4,7 @@ import android.util.Base64
 import android.content.Context
 import com.dokar.quickjs.QuickJs
 import com.dokar.quickjs.binding.function
+import com.hikari.app.net.DohDns
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
@@ -144,6 +145,7 @@ object NuvioRuntime {
             .followSslRedirects(true)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
+            .dns(DohDns)
             // Plain OkHttp, mirroring NuvioMobile's own httpRequestRaw: no
             // cookie jar, no UA rewriting, transparent gzip via the bridge's
             // Accept-Encoding stripping, and — unlike the 0.3.5x builds — NO
