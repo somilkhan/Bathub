@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -269,6 +270,7 @@ fun SettingsScreen(nav: NavHostController) {
                         }
                     }
                     item { SettingsCard { UniversalExtractionCard(app) } }
+                    item { SettingsCard { SourceSearchScopeCard(app) } }
                     item { SettingsCard { ContinueWatchingCard(app, hideContinue, scope) } }
                     item { SettingsCard { UserscriptsCard(app) } }
                 }
@@ -1288,6 +1290,65 @@ private fun LoadingBannerCard(app: HikariApp) {
             )
         }
     }
+}
+
+@Composable
+private fun SourceSearchScopeCard(app: HikariApp) {
+    val scope = rememberCoroutineScope()
+    val mode by remember { app.store.sourceSearchScopeFlow() }.collectAsState(initial = "all")
+    val exceptions by remember { app.store.sourceSearchExceptionsFlow() }.collectAsState(initial = emptySet())
+    val providers by app.providers.providers.collectAsState()
+    var showExceptions by remember { mutableStateOf(false) }
+    val enabled = providers.filter { it.config.enabled }
+
+    Column(Modifier.padding(16.dp)) {
+        Text("Server search", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            when (mode) {
+                "origin" -> "Search only the extension that opened the title."
+                "exceptions" -> "Search the origin plus selected extensions."
+                else -> "Search the origin and all enabled extensions."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        listOf("all" to "All extensions", "origin" to "Only this extension", "exceptions" to "Exception extensions").forEach { (key, label) ->
+            Row(Modifier.fillMaxWidth().clickable { scope.launch { app.store.setSourceSearchScope(key) } }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = mode == key, onClick = { scope.launch { app.store.setSourceSearchScope(key) } })
+                Spacer(Modifier.width(8.dp))
+                Text(label, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        if (mode == "exceptions") TextButton(onClick = { showExceptions = true }) {
+            Text("Choose extensions")
+        }
+    }
+
+    if (showExceptions) AlertDialog(
+        onDismissRequest = { showExceptions = false },
+        title = { Text("Exception extensions") },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                items(enabled, key = { it.config.id }) { provider ->
+                    val checked = provider.config.id in exceptions
+                    Row(Modifier.fillMaxWidth().clickable {
+                        val next = if (checked) exceptions - provider.config.id else exceptions + provider.config.id
+                        scope.launch { app.store.setSourceSearchExceptions(next) }
+                    }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = checked, onCheckedChange = { value ->
+                            val next = if (value) exceptions + provider.config.id else exceptions - provider.config.id
+                            scope.launch { app.store.setSourceSearchExceptions(next) }
+                        })
+                        Spacer(Modifier.width(8.dp))
+                        Text(provider.config.name, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { showExceptions = false }) { Text("Done") } },
+    )
 }
 
 @Composable
