@@ -119,7 +119,6 @@ object CloudStreamPlayerAdapter {
                 com.lagradost.cloudstream3.utils.WIDEVINE_DRM_UUID
             "9a04f079-9840-4286-ab92-e65be0885f95" ->
                 com.lagradost.cloudstream3.utils.PLAYREADY_DRM_UUID
-            "e2719d58-a985-b3c9-781a-b030af78d30e",
             "e2719d58-a985-b3c9-781a-b030af78d30e" ->
                 com.lagradost.cloudstream3.utils.CLEARKEY_DRM_UUID
             else -> runCatching {
