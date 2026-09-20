@@ -77,6 +77,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -110,19 +111,27 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val homeCache = LinkedHashMap<String, List<CatalogRow>>()
 
     init {
+        // The Hero picker and More → Extension both write the same persisted
+        // selection. Observe that store value here so either picker immediately
+        // drives Home; previously More only changed DataStore and HomeViewModel
+        // kept its old in-memory selection forever.
         viewModelScope.launch {
-            // Restore the user's last pick ("All" when never picked).
-            _selectedProvider.value = store.homeProvider().ifBlank { null }
-            loadInternal()
+            store.homeProviderFlow()
+                .distinctUntilChanged()
+                .collect { raw ->
+                    val id = raw.ifBlank { null }
+                    if (_selectedProvider.value != id) {
+                        _selectedProvider.value = id
+                        loadInternal()
+                    }
+                }
         }
         viewModelScope.launch {
             manager.providers.collect { ps ->
                 val sel = _selectedProvider.value
                 if (sel != null && ps.none { it.config.enabled && it.config.id == sel }) {
-                    _selectedProvider.value = null
                     store.setHomeProvider("")
                 }
-                loadInternal()
             }
         }
     }
