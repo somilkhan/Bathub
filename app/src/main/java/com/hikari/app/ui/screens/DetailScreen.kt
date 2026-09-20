@@ -772,6 +772,8 @@ fun DetailScreen(
     // server either — the chooser should come up the moment servers exist.
     val askServerFlow = remember { app.store.askServerOnPlayFlow() }
     val askServerOnPlay by askServerFlow.collectAsState(initial = false)
+    val playerEngineFlow = remember { app.store.playerEngineFlow() }
+    val playerEngine by playerEngineFlow.collectAsState(initial = "cloudstream")
     // Servers the player must know about before it starts. 1 = "as soon as the
     // first server is found" (the default).
     val startAfterServers = if (playWaitServers) playMinServers else 1
@@ -854,6 +856,7 @@ fun DetailScreen(
                 // Ask before playing: the player shows every server it found,
                 // grouped by engine, instead of starting one by itself.
                 putExtra("askServer", askServerOnPlay)
+                putExtra("playerEngine", playerEngine)
                 putExtra("histEpisodeId", ep?.id.orEmpty())
                 putExtra("histEpisodeName", ep?.name.orEmpty())
                 putExtra("histEpisodeSeason", ep?.season ?: 0)
