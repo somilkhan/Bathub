@@ -2100,7 +2100,7 @@ private fun AdBlockingCard(app: HikariApp) {
 @Composable
 private fun PlayerEngineCard(app: HikariApp) {
     val scope = rememberCoroutineScope()
-    val engine by remember { app.store.playerEngineFlow() }.collectAsState(initial = "cloudstream")
+    val engine by remember { app.store.playerEngineFlow() }.collectAsState(initial = "hikari")
 
     Column(Modifier.padding(16.dp)) {
         Text(
