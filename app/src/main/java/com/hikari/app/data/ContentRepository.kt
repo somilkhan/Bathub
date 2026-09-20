@@ -630,14 +630,20 @@ class ContentRepository(private val manager: ProviderManager) {
         withContext(Dispatchers.IO) {
             val all = manager.providers.value.filter { it.config.enabled }
             val origin = manager.byId(item.providerId)
+            val searchScope = hikariScope()
+            val exceptions = if (searchScope == "exceptions") appSourceExceptions() else emptySet()
+            val originIsException = origin?.config?.id?.let { it in exceptions } == true
+            // If the opened extension is itself an exception, keep the lookup
+            // local to it. Otherwise exceptions are additive to the origin.
+            val scopeAll = searchScope == "all" && !originIsException
+            val scopeOriginOnly = searchScope == "origin" || originIsException
             val primaryTargets = if (origin?.config?.type == ProviderType.STREMIO) {
-                // Like the real client: ask every Stremio addon plus the origin.
-                all.filter { p ->
-                    p.config.id == item.providerId || p.config.type == ProviderType.STREMIO
+                when {
+                    scopeOriginOnly -> listOf(origin)
+                    scopeAll -> all.filter { p -> p.config.id == item.providerId || p.config.type == ProviderType.STREMIO }
+                    else -> all.filter { p -> p.config.id == item.providerId || p.config.id in exceptions }
                 }
             } else {
-                // CS3 plugin / universal scraper: only the origin can resolve
-                // its own ids, so asking the Stremio addons just adds latency.
                 listOfNotNull(origin)
             }
             // Nuvio providers resolve purely from a TMDB id, so they can be
@@ -646,7 +652,10 @@ class ContentRepository(private val manager: ProviderManager) {
             // then sorted so the historically-fast providers get first shot
             // at the parallel engine slots (NUVIO_PRIORITY order).
             val nuvioTargets = if (com.hikari.app.nuvio.TmdbResolver.isLikelyResolvable(item)) {
-                all.filter { it.config.type == ProviderType.NUVIO }
+                all.filter { p ->
+                    p.config.type == ProviderType.NUVIO &&
+                        (scopeAll || p.config.id == item.providerId || p.config.id in exceptions)
+                }
                     .sortedWith(
                         compareBy(
                             // The provider the user opened this title from goes
@@ -673,7 +682,7 @@ class ContentRepository(private val manager: ProviderManager) {
             // The other installed extensions that get their turn on EVERY
             // lookup (see crossExtensionSearch). Resolved up front so both the
             // merge loop and the deadline below can use the list.
-        val crossTargets = crossExtensionTargets(item, origin)
+        val crossTargets = if (scopeAll) crossExtensionTargets(item, origin) else if (scopeOriginOnly) emptyList() else crossExtensionTargets(item, origin, exceptions)
         // Other repos of the SAME engine as the origin (e.g. the user's other
         // CloudStream repos when the title was opened from one) are pulled out
         // and searched in the FIRST pass, right beside the origin: they search
@@ -1082,6 +1091,11 @@ class ContentRepository(private val manager: ProviderManager) {
         return host == "w3.org" || host.endsWith(".w3.org")
     }
 
+    /** The selected source-search scope is persisted in AppStore. */
+    private suspend fun hikariScope(): String = HikariApp.instance.store.sourceSearchScope()
+
+    private suspend fun appSourceExceptions(): Set<String> = HikariApp.instance.store.sourceSearchExceptions()
+
     /** The other installed extensions worth asking by title: .cs3 / .hiki /
      *  universal providers all expose search + load() + loadLinks(), and a
      *  Stremio addon does too (search → meta → stream) — so a title opened from
@@ -1092,7 +1106,7 @@ class ContentRepository(private val manager: ProviderManager) {
      *     pass already asked every addon in that case;
      *   - nuvio providers entirely, since the main pass already searched them
      *     by TMDB id (they resolve without the title at all). */
-    private fun crossExtensionTargets(item: MediaItem, origin: ContentProvider?): List<ContentProvider> {
+    private fun crossExtensionTargets(item: MediaItem, origin: ContentProvider?, onlyIds: Set<String>? = null): List<ContentProvider> {
         val originType = origin?.config?.type
         val originIsStremio = originType == ProviderType.STREMIO
         // Trust rank: the origin's OWN engine first (other repos of the same
@@ -1110,6 +1124,7 @@ class ContentRepository(private val manager: ProviderManager) {
         val families = manager.providers.value
             .filter { p ->
                 if (!p.config.enabled || p.config.id == item.providerId) return@filter false
+                if (onlyIds != null && p.config.id !in onlyIds) return@filter false
                 when (p.config.type) {
                     ProviderType.CS3,
                     ProviderType.HIKARI,
