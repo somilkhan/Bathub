@@ -73,6 +73,7 @@ class AppStore(private val ctx: Context) {
         val PLAY_WAIT_SERVERS = booleanPreferencesKey("playWaitServers")
         val PLAY_MIN_SERVERS = intPreferencesKey("playMinServers")
         val ASK_SERVER = booleanPreferencesKey("askServerOnPlay")
+        val PLAYER_ENGINE = stringPreferencesKey("playerEngine")
         val SHOW_LOADING_BANNER = booleanPreferencesKey("showLoadingBanner")
         val SLOW_TIP_ENABLED = booleanPreferencesKey("slowTipEnabled")
         val SLOW_TIP_DONT_ASK = booleanPreferencesKey("slowTipDontAsk")
@@ -127,7 +128,7 @@ class AppStore(private val ctx: Context) {
      * Stremio), and waits for the user to pick one instead of playing on its
      * own.
      */
-    fun askServerOnPlayFlow(): Flow<Boolean> =
+    fun playerEngineFlow(): Flow<String> = store.data.map { it[K.PLAYER_ENGINE] ?: "cloudstream" }\n\n    suspend fun playerEngine(): String = playerEngineFlow().first()\n\n    suspend fun setPlayerEngine(engine: String) {\n        store.edit { it[K.PLAYER_ENGINE] = if (engine == "hikari") "hikari" else "cloudstream" }\n    }\n\n    fun askServerOnPlayFlow(): Flow<Boolean> =
         store.data.map { it[K.ASK_SERVER] ?: false }
 
     suspend fun askServerOnPlay(): Boolean = askServerOnPlayFlow().first()
