@@ -37,6 +37,87 @@ import java.util.concurrent.ConcurrentHashMap
  * Adapts a loaded CloudStream MainAPI to Hikari's ContentProvider contract so
  * .cs3 plugins appear in Home/Search/Detail/Player like any other provider.
  */
+/**
+ * CloudStream-compatible execution boundary for a loaded MainAPI.
+ *
+ * This intentionally mirrors CloudStream's APIRepository semantics instead of
+ * calling MainAPI directly from the Hikari adapter: provider-specific timeouts,
+ * fixUrl(), homepage throttling/horizontalImages, and bounded loadLinks are
+ * part of the .cs3 runtime contract.
+ */
+private class Cs3ApiRepository(private val api: MainAPI) {
+    private companion object {
+        const val DEFAULT_TIMEOUT = 120_000L
+        const val MAX_TIMEOUT = DEFAULT_TIMEOUT * 4
+        const val MIN_TIMEOUT = 5_000L
+        fun timeout(desired: Long?): Long =
+            (desired ?: DEFAULT_TIMEOUT).coerceIn(MIN_TIMEOUT, MAX_TIMEOUT)
+    }
+
+    private suspend fun <T> bounded(desired: Long?, block: suspend () -> T): T? =
+        try {
+            withTimeoutOrNull(timeout(desired)) { block() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            null
+        }
+
+    private suspend fun waitForHomeDelay() {
+        if (!api.sequentialMainPage) return
+        val delayMs = api.sequentialMainPageDelay
+        if (delayMs <= 0L) return
+        val delta = delayMs + api.lastHomepageRequest - System.currentTimeMillis()
+        if (delta > 0L) kotlinx.coroutines.delay(delta)
+    }
+
+    suspend fun getMainPage(page: Int, data: MainPageData): List<HomePageList> {
+        waitForHomeDelay()
+        api.lastHomepageRequest = System.currentTimeMillis()
+        val response = bounded(api.getMainPageTimeoutMs) {
+            api.getMainPage(
+                page,
+                MainPageRequest(data.name, data.data, data.horizontalImages)
+            )
+        }
+        return response?.items.orEmpty()
+    }
+
+    suspend fun search(query: String, page: Int): List<SearchResponse> {
+        if (query.isEmpty()) return emptyList()
+        return bounded(api.searchTimeoutMs) {
+            try {
+                api.search(query, page)?.items.orEmpty()
+            } catch (e: NotImplementedError) {
+                api.search(query).orEmpty()
+            }
+        }.orEmpty()
+    }
+
+    suspend fun load(url: String): LoadResponse? {
+        if (url.isBlank() || url == "[]" || url == "about:blank") return null
+        val fixedUrl = runCatching { api.fixUrl(url) }.getOrDefault(url)
+        return bounded(api.loadTimeoutMs) { api.load(fixedUrl) }
+    }
+
+    suspend fun loadLinks(
+        data: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (com.lagradost.cloudstream3.utils.ExtractorLink) -> Unit,
+    ): Boolean {
+        if (data.isBlank() || data == "[]" || data == "about:blank") return false
+        return try {
+            withTimeoutOrNull(timeout(api.loadLinksTimeoutMs)) {
+                api.loadLinks(data, false, subtitleCallback, callback)
+            } ?: false
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            false
+        }
+    }
+}
+
 class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider {
 
     companion object {
@@ -338,7 +419,7 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
             }
         }
         val resp = try {
-            a.getMainPage(pageNumber, MainPageRequest(page.name, page.data, false))
+            repository.getMainPage(pageNumber, page)
         } catch (e: Throwable) {
             if (e is CancellationException) throw e
             // A brand-new plugin instance can fail its very first network call
@@ -392,7 +473,7 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
                 return@withContext rowItems
             }
             val resp = try {
-                a.getMainPage(page, MainPageRequest(ref.name, ref.id, false))
+                repository.getMainPage(page, MainPageData(ref.name, ref.id, false))
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
                 // A brand-new plugin instance can fail its very first network
@@ -478,10 +559,10 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
      *  calling the paginated form first is correct for BOTH generations. */
     private suspend fun searchItems(a: MainAPI, query: String, page: Int): List<SearchResponse> {
         return try {
-            a.search(query, page)?.items.orEmpty()
+            repository.search(query, page)
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
-            a.search(query).orEmpty()
+            repository.search(query, page)
         }
     }
 
@@ -652,7 +733,7 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
                         suspend fun runOnce(budget: Long, url: String) {
                             val s = System.currentTimeMillis()
                             completed = withTimeoutOrNull(budget) {
-                                a.loadLinks(url, false, { subs.add(it) }, { links.add(it) })
+                                repository.loadLinks(url, { subs.add(it) }, { links.add(it) })
                             }
                             elapsedMs += System.currentTimeMillis() - s
                         }
@@ -1040,7 +1121,7 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
 
     /** One load() attempt, treating a plugin crash as a miss (never throwing). */
     private suspend fun tryLoad(a: MainAPI, id: String): LoadResponse? = try {
-        a.load(id)
+        repository.load(id)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Throwable) {
