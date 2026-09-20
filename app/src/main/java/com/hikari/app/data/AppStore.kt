@@ -73,6 +73,8 @@ class AppStore(private val ctx: Context) {
         val PLAY_WAIT_SERVERS = booleanPreferencesKey("playWaitServers")
         val PLAY_MIN_SERVERS = intPreferencesKey("playMinServers")
         val ASK_SERVER = booleanPreferencesKey("askServerOnPlay")
+        val SOURCE_SEARCH_SCOPE = stringPreferencesKey("sourceSearchScope")
+        val SOURCE_SEARCH_EXCEPTIONS = stringPreferencesKey("sourceSearchExceptions")
         val PLAYER_ENGINE = stringPreferencesKey("playerEngine")
         val SHOW_LOADING_BANNER = booleanPreferencesKey("showLoadingBanner")
         val SLOW_TIP_ENABLED = booleanPreferencesKey("slowTipEnabled")
@@ -134,6 +136,28 @@ class AppStore(private val ctx: Context) {
 
     suspend fun setPlayerEngine(engine: String) {
         store.edit { it[K.PLAYER_ENGINE] = if (engine == "hikari") "hikari" else "cloudstream" }
+    }
+
+    /** Server search scope: all installed extensions, origin only, or selected exceptions. */
+    fun sourceSearchScopeFlow(): Flow<String> =
+        store.data.map { it[K.SOURCE_SEARCH_SCOPE] ?: "all" }
+
+    suspend fun sourceSearchScope(): String = sourceSearchScopeFlow().first()
+
+    suspend fun setSourceSearchScope(scope: String) {
+        store.edit { it[K.SOURCE_SEARCH_SCOPE] = scope }
+    }
+
+    fun sourceSearchExceptionsFlow(): Flow<Set<String>> =
+        store.data.map { raw ->
+            raw[K.SOURCE_SEARCH_EXCEPTIONS].orEmpty()
+                .split('|').filter { it.isNotBlank() }.toSet()
+        }
+
+    suspend fun sourceSearchExceptions(): Set<String> = sourceSearchExceptionsFlow().first()
+
+    suspend fun setSourceSearchExceptions(ids: Set<String>) {
+        store.edit { it[K.SOURCE_SEARCH_EXCEPTIONS] = ids.joinToString("|") }
     }
 
     fun askServerOnPlayFlow(): Flow<Boolean> =
