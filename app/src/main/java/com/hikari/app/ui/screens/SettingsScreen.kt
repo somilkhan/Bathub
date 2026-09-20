@@ -249,8 +249,9 @@ fun SettingsScreen(nav: NavHostController) {
             }
             when (folder) {
                 SettingsFolder.PLAYER -> {
+                    item { SettingsCard(top = 2.dp) { PlayerEngineCard(app) } }
                     item {
-                        SettingsCard(top = 2.dp) {
+                        SettingsCard {
                             PlayerControlsCard(onOpen = { showPlayerControls = true })
                         }
                     }
@@ -2031,6 +2032,48 @@ private fun AdBlockingCard(app: HikariApp) {
     }
 }
 
+
+// ---- Player engine ----
+
+@Composable
+private fun PlayerEngineCard(app: HikariApp) {
+    val scope = rememberCoroutineScope()
+    val engine by remember { app.store.playerEngineFlow() }.collectAsState(initial = "cloudstream")
+
+    Column(Modifier.padding(16.dp)) {
+        Text(
+            "Default player",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Choose which playback engine opens when you press Play.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf("cloudstream" to "CloudStream", "hikari" to "Hikari").forEach { (key, label) ->
+                val selected = engine == key
+                OutlinedButton(
+                    onClick = { scope.launch { app.store.setPlayerEngine(key) } },
+                    modifier = Modifier.weight(1f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outline
+                    )
+                ) {
+                    Text(if (selected) "✓  $label" else label)
+                }
+            }
+        }
+    }
+}
 
 // ---- Player controls & video enhance (Player folder) ----
 
