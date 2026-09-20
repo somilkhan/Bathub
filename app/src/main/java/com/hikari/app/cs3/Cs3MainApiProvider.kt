@@ -477,9 +477,12 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
                         "CloudStream home row returned ${rawItems.size} items but Hikari could not map any of them"
                     }
                     catalogErrors[config.id] = "$reason: ${ref.name}"
+                    val sample = rawItems.take(3).joinToString(" || ") { item ->
+                        "${item::class.java.simpleName}{name='${item.name}',url='${item.url}',poster='${item.posterUrl}'}"
+                    }
                     com.hikari.app.data.Logs.log(
                         "Provider",
-                        "${config.name}: home catalog '${ref.name}' empty; rows=${rows.size}, rawItems=${rawItems.size}, mapped=${rowItems.size}"
+                        "${config.name}: home catalog '${ref.name}' empty; rows=${rows.size}, rawItems=${rawItems.size}, mapped=${rowItems.size}; sample=$sample"
                     )
                 } else {
                     catalogErrors.remove(config.id)
@@ -1189,13 +1192,20 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
     }
 
     private fun SearchResponse.toMediaItem(): MediaItem? {
-        if (name.isBlank()) return null
-        // A few CloudStream home providers publish display-only SearchResponse
-        // entries with an empty URL. CloudStream can still render these rows;
-        // Hikari needs a stable id so the card can be resolved later by title.
+        // HomePageList entries are valid CloudStream SearchResponse objects even
+        // when a provider leaves the display name empty. Do not discard a whole
+        // row just because name is blank: the canonical URL is still enough to
+        // open the title, and we can derive a readable fallback for the card.
+        val displayName = name.trim().ifBlank {
+            url.substringAfterLast('/').substringBefore('?').substringBefore('#')
+                .replace('-', ' ').replace('_', ' ').trim()
+        }.ifBlank {
+            posterUrl?.substringAfterLast('/')?.substringBefore('?')?.substringBefore('#')
+                ?.replace('-', ' ')?.replace('_', ' ')?.trim().orEmpty()
+        }.ifBlank { "Untitled" }
         val itemId = url.takeIf { it.isNotBlank() } ?: run {
             val encoded = android.util.Base64.encodeToString(
-                name.toByteArray(Charsets.UTF_8),
+                displayName.toByteArray(Charsets.UTF_8),
                 android.util.Base64.NO_WRAP,
             )
             "hikari-home:$encoded"
@@ -1217,7 +1227,7 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
         return MediaItem(
             providerId = config.id,
             id = itemId,
-            title = name,
+            title = displayName,
             type = mt,
             posterUrl = posterUrl,
             year = year,
