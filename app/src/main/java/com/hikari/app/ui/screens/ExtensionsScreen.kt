@@ -907,7 +907,8 @@ class ExtensionsViewModel(app: Application) : AndroidViewModel(app) {
         root.optJSONArray("pluginLists")?.let { lists ->
             for (i in 0 until lists.length()) {
                 val listUrl = lists.optString(i).ifBlank { null } ?: continue
-                val listText = Http.fetchStringRobust(listUrl).getOrNull() ?: continue
+                val listText = fetchRepoRaw(listUrl, "plugins.json")
+                    .getOrNull() ?: continue
                 val arr = runCatching { JSONArray(listText) }.getOrNull() ?: continue
                 for (j in 0 until arr.length()) {
                     arr.optJSONObject(j)?.let { parsePlugin(it)?.let { p -> out[p.url] = p } }
@@ -1003,10 +1004,12 @@ class ExtensionsViewModel(app: Application) : AndroidViewModel(app) {
             description = o.optString("description"),
             url = url,
             iconUrl = o.optString("iconUrl").ifBlank { null },
+            internalName = o.optString("internalName"),
             authors = strings("authors"),
             version = o.optInt("version", 1),
             tvTypes = strings("tvTypes"),
             fileHash = o.optString("fileHash").ifBlank { null },
+            repositoryUrl = o.optString("repositoryUrl").ifBlank { null },
         )
     }
 
@@ -1023,7 +1026,14 @@ class ExtensionsViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
         }
-        val fileName = plugin.name.substringBeforeLast('.').takeIf { it.isNotBlank() } ?: "plugin"
+        // Match CloudStream's identity rule: use stable internalName, not
+        // display name, and salt it with the owning repository so identical
+        // plugin names from different repositories can coexist.
+        val identity = plugin.internalName.ifBlank {
+            plugin.name.substringBeforeLast('.').ifBlank { "plugin" }
+        }
+        val repoSalt = (plugin.repositoryUrl ?: "").hashCode().toString()
+        val fileName = "${identity}_${repoSalt}".replace(Regex("[^A-Za-z0-9._-]"), "_")
         installCs3Bytes(bytes, "$fileName.cs3", sourceUrl = plugin.url, iconUrl = plugin.iconUrl)
     }
 
