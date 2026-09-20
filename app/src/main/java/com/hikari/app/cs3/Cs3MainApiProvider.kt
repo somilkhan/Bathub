@@ -421,15 +421,12 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
                 if (System.currentTimeMillis() - at < HOME_ROWS_TTL_MS) return rows
             }
         }
-        val resp = try {
+        val rows = try {
             repository(a).getMainPage(pageNumber, page)
         } catch (e: Throwable) {
             if (e is CancellationException) throw e
-            // A brand-new plugin instance can fail its very first network call
-            // while the runtime/session initializes — retry once.
-            a.getMainPage(pageNumber, MainPageRequest(page.name, page.data, false))
+            repository(a).getMainPage(pageNumber, page)
         }
-        val rows = resp?.items.orEmpty()
         if (pageNumber == 1) homePageCache[key] = System.currentTimeMillis() to rows
         return rows
     }
@@ -475,25 +472,19 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
                 }
                 return@withContext rowItems
             }
-            val resp = try {
+            val rows = try {
                 repository(a).getMainPage(page, MainPageData(ref.name, ref.id, false))
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
-                // A brand-new plugin instance can fail its very first network
-                // call while the runtime/session initializes — retry once.
                 try {
-                    a.getMainPage(page, MainPageRequest(ref.name, ref.id, false))
+                    repository(a).getMainPage(page, MainPageData(ref.name, ref.id, false))
                 } catch (e2: Throwable) {
                     if (e2 is CancellationException) throw e2
                     catalogErrors[config.id] = fullCause(e2)
                     return@withContext emptyList()
                 }
             }
-            if (resp == null) {
-                catalogErrors[config.id] = "getMainPage returned null for ${ref.id}"
-                return@withContext emptyList()
-            }
-            val items = resp.items.orEmpty().flatMap { row ->
+            val items = rows.flatMap { row ->
                 row.list.orEmpty().mapNotNull { it.toMediaItem() }
             }
             if (items.isEmpty()) {
