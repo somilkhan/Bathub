@@ -4010,6 +4010,11 @@ class PlayerActivity : ComponentActivity() {
         // From here on the chooser may show this row as the current one.
         playbackCommitted = true
         val src = sources[index]
+        com.hikari.app.data.Logs.log(
+            "Player",
+            "HikariPlayer: source " + (index + 1) + "/" + sources.size +
+                " name=" + src.name + " provider=" + src.providerId
+        )
         // Persisting here would remember a source that has NOT proven itself —
         // a signed link that turns out to be expired, or a URL/host whose right
         // header set we haven't found yet, would then be "the last working
