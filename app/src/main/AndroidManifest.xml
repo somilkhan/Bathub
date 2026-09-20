@@ -42,6 +42,15 @@
         </activity>
 
         <activity
+            android:name=".player.Cs3PlayerActivity"
+            android:launchMode="singleTop"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
+            android:theme="@style/Theme.Hikari.Player" />
+
+        <activity
 android:name=".player.PlayerActivity"
             android:launchMode="singleTop"
             android:exported="false"
