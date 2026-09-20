@@ -280,6 +280,11 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
     private val _liveStreams = MutableStateFlow<List<StreamSource>>(emptyList())
     val liveStreams: StateFlow<List<StreamSource>> = _liveStreams.asStateFlow()
 
+    /** Receives source batches that arrive after the screen's foreground
+     * collector has finished, e.g. from a background continuation sweep. */
+    @Volatile
+    var liveSink: (suspend (List<StreamSource>) -> Unit)? = null
+
     /** How many addons were asked for sources on the last lookup. */
     private val _searchedProviders = MutableStateFlow(0)
     val searchedProviders: StateFlow<Int> = _searchedProviders.asStateFlow()
@@ -501,6 +506,7 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
             val feed: (suspend (List<StreamSource>) -> Unit) = { partial ->
                 _liveStreams.value = partial
                 onProgress?.invoke(partial)
+                liveSink?.invoke(partial)
             }
             val result = withContext(Dispatchers.IO) {
                 runCatching { repo.streamsFor(item, ep, feed) }.getOrDefault(emptyList())
@@ -939,6 +945,15 @@ fun DetailScreen(
         // server" dialog shows every source from every installed provider.
         sessionId = UUID.randomUUID().toString()
         vm.resetLiveStreams()
+        // Keep late/background source results connected to this play session.
+        vm.liveSink = { partial ->
+            if (launched || playerLaunched) {
+                val playable = partial.filter { s ->
+                    s.ytId == null && !s.externalUrl && (s.url.isNotBlank() || s.isTorrent)
+                }
+                if (playable.isNotEmpty()) StreamsLive.append(sessionId, playable)
+            }
+        }
         // Launch the player NOW with an empty source list — it shows its own
         // title card and waits for the first servers on [sessionId]. If the
         // launch itself fails (the activity can't be resolved), the coroutine
