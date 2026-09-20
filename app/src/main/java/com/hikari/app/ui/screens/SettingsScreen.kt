@@ -1331,7 +1331,8 @@ private fun SourceSearchScopeCard(app: HikariApp) {
         title = { Text("Exception extensions") },
         text = {
             LazyColumn(Modifier.heightIn(max = 420.dp)) {
-                items(enabled, key = { it.config.id }) { provider ->
+                items(enabled.size) { index ->
+                    val provider = enabled[index]
                     val checked = provider.config.id in exceptions
                     Row(Modifier.fillMaxWidth().clickable {
                         val next = if (checked) exceptions - provider.config.id else exceptions + provider.config.id
