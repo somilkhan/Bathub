@@ -591,6 +591,34 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
     }
 
     override suspend fun getMeta(item: MediaItem): MediaItem {
+        // Some home rows expose a title/poster but no canonical URL. Resolve
+        // those synthetic home ids through the provider's normal title search,
+        // then continue through the regular load() path.
+        if (item.id.startsWith("hikari-home:")) {
+            val encoded = item.id.removePrefix("hikari-home:")
+            val title = runCatching {
+                String(
+                    android.util.Base64.decode(encoded, android.util.Base64.NO_WRAP),
+                    Charsets.UTF_8,
+                )
+            }.getOrNull()
+            if (!title.isNullOrBlank()) {
+                val resolved = runCatching {
+                    searchItems(api ?: return@runCatching null, title, 1)
+                        .firstOrNull { it.name.equals(title, ignoreCase = true) && it.url.isNotBlank() }
+                        ?: searchItems(api ?: return@runCatching null, title, 1).firstOrNull { it.url.isNotBlank() }
+                }.getOrNull()
+                if (resolved != null) {
+                    val resolvedItem = resolved.toMediaItem()
+                    if (resolvedItem != null && resolvedItem.id != item.id) {
+                        return getMeta(resolvedItem).copy(
+                            title = item.title.ifBlank { resolvedItem.title },
+                            posterUrl = item.posterUrl ?: resolvedItem.posterUrl,
+                        )
+                    }
+                }
+            }
+        }
         // Always run the provider's load() and correct the type from the actual
         // LoadResponse — many plugins report a broad/odd TvType on their search
         // results (e.g. NSFW) that would otherwise leave the detail screen with
@@ -1161,7 +1189,17 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
     }
 
     private fun SearchResponse.toMediaItem(): MediaItem? {
-        if (url.isBlank() || name.isBlank()) return null
+        if (name.isBlank()) return null
+        // A few CloudStream home providers publish display-only SearchResponse
+        // entries with an empty URL. CloudStream can still render these rows;
+        // Hikari needs a stable id so the card can be resolved later by title.
+        val itemId = url.takeIf { it.isNotBlank() } ?: run {
+            val encoded = android.util.Base64.encodeToString(
+                name.toByteArray(Charsets.UTF_8),
+                android.util.Base64.NO_WRAP,
+            )
+            "hikari-home:$encoded"
+        }
         val mt = when (type) {
             // NSFW providers (LeakPorner, KanAV, …) label their single-video
             // results NSFW — treat as movies; getMeta later corrects actor
@@ -1178,7 +1216,7 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
         }
         return MediaItem(
             providerId = config.id,
-            id = url,
+            id = itemId,
             title = name,
             type = mt,
             posterUrl = posterUrl,
