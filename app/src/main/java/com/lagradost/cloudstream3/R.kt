@@ -4,8 +4,8 @@ package com.lagradost.cloudstream3
  * Resource bridge for the CloudStream player classes bundled as a jar.
  *
  * The jar's Android R class is intentionally stripped during packaging because
- * Hikari owns the application resources. These constants point the compiled
- * CloudStream player at equivalent Hikari resources/keys.
+ * Hikari owns the application resources. These fields point the compiled
+ * CloudStream player at equivalent Hikari resource keys.
  */
 object R {
     object string {
@@ -23,8 +23,6 @@ object R {
         @JvmField val subtitles_encoding_key = com.hikari.app.R.string.cs_subtitles_encoding_key
         @JvmField val preview_seekbar_key = com.hikari.app.R.string.cs_preview_seekbar_key
     }
-}
-
 
     object font {
         @JvmField val trebuchet_ms = 0
@@ -42,3 +40,4 @@ object R {
         @JvmField val comic_sans = 0
         @JvmField val poppins_regular = 0
     }
+}
