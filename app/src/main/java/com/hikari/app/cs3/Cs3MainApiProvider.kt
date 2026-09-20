@@ -463,10 +463,24 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
                     catalogErrors[config.id] = fullCause(e)
                     return@withContext emptyList()
                 }
-                val row = rows.getOrNull(rowIndex) ?: rows.firstOrNull()
-                val rowItems = row?.list.orEmpty().mapNotNull { it.toMediaItem() }
+                // CloudStream providers may rebuild/reorder HomePageLists between
+                // calls. Prefer the row name, then the original index.
+                val row = rows.firstOrNull { candidate ->
+                    candidate.name.isNotBlank() && candidate.name == ref.name
+                } ?: rows.getOrNull(rowIndex) ?: rows.firstOrNull()
+                val rawItems = row?.list.orEmpty()
+                val rowItems = rawItems.mapNotNull { it.toMediaItem() }
                 if (rowItems.isEmpty()) {
-                    catalogErrors[config.id] = "No items in ${ref.name}"
+                    val reason = if (rawItems.isEmpty()) {
+                        "CloudStream home row returned 0 items"
+                    } else {
+                        "CloudStream home row returned ${rawItems.size} items but Hikari could not map any of them"
+                    }
+                    catalogErrors[config.id] = "$reason: ${ref.name}"
+                    com.hikari.app.data.Logs.log(
+                        "Provider",
+                        "${config.name}: home catalog '${ref.name}' empty; rows=${rows.size}, rawItems=${rawItems.size}, mapped=${rowItems.size}"
+                    )
                 } else {
                     catalogErrors.remove(config.id)
                 }
