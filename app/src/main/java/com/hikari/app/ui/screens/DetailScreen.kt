@@ -456,8 +456,13 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
             // what makes a Play tap instant right after the detail page opened).
             // A fresh list is safe to mirror onto the live feed, because those
             // signed links still work.
-            val fresh = System.currentTimeMillis() - cached.at < STREAM_CACHE_TTL_MS
-            if (!force && (cached.list.isEmpty() || fresh)) {
+            val age = System.currentTimeMillis() - cached.at
+            val fresh = if (cached.list.isEmpty()) {
+                age < EMPTY_STREAM_CACHE_TTL_MS
+            } else {
+                age < STREAM_CACHE_TTL_MS
+            }
+            if (!force && fresh) {
                 com.hikari.app.data.Logs.log(
                     "Search",
                     "cache hit \"${item.title}\" (${if (fresh) "fresh" else "empty"}) " +
@@ -612,6 +617,7 @@ private const val PREFERRED_GRACE_MS = 10_000L
  *  is comfortably under the rotation window while still making an immediate
  *  Play tap instant. */
 private const val STREAM_CACHE_TTL_MS = 300_000L
+private const val EMPTY_STREAM_CACHE_TTL_MS = 15_000L
 
 /** How long a Play tap made while episodes are still loading waits for the
  *  episode list before falling back to a movie-style search. The player is
