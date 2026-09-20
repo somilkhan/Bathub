@@ -1832,6 +1832,8 @@ private fun playerPayload(streams: List<StreamSource>): String? = runCatching {
                     // "Select server", and starts playback on its server.
                     .put("providerId", s.providerId)
                     .put("providerName", s.providerName)
+                    .put("ytId", s.ytId ?: "")
+                    .put("externalUrl", s.externalUrl)
                     .put("infoHash", s.infoHash ?: "")
                     .put("fileIdx", s.fileIdx ?: -1)
                     .put(
