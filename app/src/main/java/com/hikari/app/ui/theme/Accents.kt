@@ -39,7 +39,7 @@ enum class HikariAccent(
     ORANGE("orange", "Orange", Color(0xFFFFB056), Color(0xFFF0590A), Color(0xFFB4530A)),
     PINK("pink", "Pink", Color(0xFFFF7BC5), Color(0xFFE0248A), Color(0xFFB3266E)),
     PURPLE("purple", "Purple", Color(0xFFB98CFF), Color(0xFF7B2CBF), Color(0xFF6A2BB0)),
-    MONO("mono", "Mono", Color(0xFFE6E8F0), Color(0xFF8A90A8), Color(0xFF4A4F63));
+    MONO("mono", "Monochrome", Color(0xFFE6E8F0), Color(0xFF8A90A8), Color(0xFF4A4F63));
 
     /** The solid accent — the colour used for buttons, selected tabs, icons. */
     val mid: Color get() = lerp(start, end, 0.5f)
@@ -55,7 +55,7 @@ enum class HikariAccent(
 
     companion object {
         /** Default app accent: the amber/gold the app has always used. */
-        val DEFAULT_APP = AMBER
+        val DEFAULT_APP = MONO
 
         /** Default player accent: the cyan→violet glow the player has always
          *  used (#00B4DB → #9D4EDD, i.e. the old hikari_accent_* resources). */

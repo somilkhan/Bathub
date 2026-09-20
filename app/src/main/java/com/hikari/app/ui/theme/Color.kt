@@ -2,17 +2,17 @@ package com.hikari.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val HikariBg = Color(0xFF0B0E1A)
-val HikariSurface = Color(0xFF151A2E)
-val HikariSurfaceVariant = Color(0xFF1F2740)
-val HikariPrimary = Color(0xFFF5C569)
-val HikariOnPrimary = Color(0xFF2A1E00)
-val HikariSecondary = Color(0xFF7DD3FC)
-val HikariOnSecondary = Color(0xFF00283A)
-val HikariTertiary = Color(0xFFF7A1C4)
-val HikariError = Color(0xFFE57373)
-val HikariText = Color(0xFFEDF0F9)
-val HikariMuted = Color(0xFF9AA3C0)
+val HikariBg = Color(0xFF0A0A09)
+val HikariSurface = Color(0xFF111110)
+val HikariSurfaceVariant = Color(0xFF191918)
+val HikariPrimary = Color(0xFFEDEDE8)
+val HikariOnPrimary = Color(0xFF10100F)
+val HikariSecondary = Color(0xFFB8B8B3)
+val HikariOnSecondary = Color(0xFF111110)
+val HikariTertiary = Color(0xFFC8C8C2)
+val HikariError = Color(0xFFE5A5A5)
+val HikariText = Color(0xFFF1F1ED)
+val HikariMuted = Color(0xFF969691)
 
 // Hikari Light — warm paper background, dark text, amber accent.
 val HikariLightBg = Color(0xFFF6F4EE)

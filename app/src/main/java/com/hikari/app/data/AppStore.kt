@@ -73,11 +73,16 @@ class AppStore(private val ctx: Context) {
         val PLAY_WAIT_SERVERS = booleanPreferencesKey("playWaitServers")
         val PLAY_MIN_SERVERS = intPreferencesKey("playMinServers")
         val ASK_SERVER = booleanPreferencesKey("askServerOnPlay")
+        val SOURCE_SEARCH_SCOPE = stringPreferencesKey("sourceSearchScope")
+        val SOURCE_SEARCH_EXCEPTIONS = stringPreferencesKey("sourceSearchExceptions")
+        val PLAYER_ENGINE = stringPreferencesKey("playerEngine")
         val SHOW_LOADING_BANNER = booleanPreferencesKey("showLoadingBanner")
         val SLOW_TIP_ENABLED = booleanPreferencesKey("slowTipEnabled")
         val SLOW_TIP_DONT_ASK = booleanPreferencesKey("slowTipDontAsk")
         val SLOW_TIP_LAST_DISMISS = longPreferencesKey("slowTipLastDismiss")
         val TELEGRAM_DONT_SHOW = booleanPreferencesKey("telegramDontShow")
+        val PROFILES = stringPreferencesKey("profiles")
+        val ACTIVE_PROFILE = stringPreferencesKey("activeProfile")
     }
 
     /** Slow / mobile-data mode: raise the source-search and stream-probe
@@ -125,6 +130,36 @@ class AppStore(private val ctx: Context) {
      * Stremio), and waits for the user to pick one instead of playing on its
      * own.
      */
+    fun playerEngineFlow(): Flow<String> = store.data.map { it[K.PLAYER_ENGINE] ?: "hikari" }
+
+    suspend fun playerEngine(): String = playerEngineFlow().first()
+
+    suspend fun setPlayerEngine(engine: String) {
+        store.edit { it[K.PLAYER_ENGINE] = if (engine == "hikari") "hikari" else "cloudstream" }
+    }
+
+    /** Server search scope: all installed extensions, origin only, or selected exceptions. */
+    fun sourceSearchScopeFlow(): Flow<String> =
+        store.data.map { it[K.SOURCE_SEARCH_SCOPE] ?: "all" }
+
+    suspend fun sourceSearchScope(): String = sourceSearchScopeFlow().first()
+
+    suspend fun setSourceSearchScope(scope: String) {
+        store.edit { it[K.SOURCE_SEARCH_SCOPE] = scope }
+    }
+
+    fun sourceSearchExceptionsFlow(): Flow<Set<String>> =
+        store.data.map { raw ->
+            raw[K.SOURCE_SEARCH_EXCEPTIONS].orEmpty()
+                .split('|').filter { it.isNotBlank() }.toSet()
+        }
+
+    suspend fun sourceSearchExceptions(): Set<String> = sourceSearchExceptionsFlow().first()
+
+    suspend fun setSourceSearchExceptions(ids: Set<String>) {
+        store.edit { it[K.SOURCE_SEARCH_EXCEPTIONS] = ids.joinToString("|") }
+    }
+
     fun askServerOnPlayFlow(): Flow<Boolean> =
         store.data.map { it[K.ASK_SERVER] ?: false }
 
@@ -846,6 +881,94 @@ class AppStore(private val ctx: Context) {
         } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    // ---- HIKARI viewing profiles ----
+
+    fun profilesFlow(): Flow<List<HikariProfile>> =
+        store.data.map { parseProfiles(it[K.PROFILES]) }
+
+    suspend fun profiles(): List<HikariProfile> = profilesFlow().first()
+
+    suspend fun ensureDefaultProfile(): HikariProfile {
+        val current = profiles()
+        if (current.isNotEmpty()) return current.first()
+        val profile = HikariProfile(
+            id = "profile_${System.currentTimeMillis()}",
+            name = "Profile 1",
+            avatarId = "orb",
+            avatarBackground = 0xFF202020,
+            createdAt = System.currentTimeMillis(),
+        )
+        store.edit { it[K.PROFILES] = encodeProfiles(listOf(profile)) }
+        return profile
+    }
+
+    fun activeProfileFlow(): Flow<String> = store.data.map { it[K.ACTIVE_PROFILE].orEmpty() }
+    suspend fun activeProfileId(): String = activeProfileFlow().first()
+
+    suspend fun setActiveProfile(id: String) {
+        if (profiles().any { it.id == id }) store.edit { it[K.ACTIVE_PROFILE] = id }
+    }
+
+    suspend fun addProfile(name: String, avatarId: String = "orb", avatarBackground: Long = 0xFF202020): HikariProfile {
+        val clean = name.trim().ifBlank { "Profile ${profiles().size + 1}" }.take(32)
+        val profile = HikariProfile(
+            id = "profile_${System.currentTimeMillis()}_${(0..9999).random()}",
+            name = clean,
+            avatarId = avatarId,
+            avatarBackground = avatarBackground,
+            createdAt = System.currentTimeMillis(),
+        )
+        store.edit { prefs ->
+            prefs[K.PROFILES] = encodeProfiles((parseProfiles(prefs[K.PROFILES]) + profile).take(8))
+        }
+        return profile
+    }
+
+    suspend fun renameProfile(id: String, name: String) {
+        val clean = name.trim().take(32)
+        if (clean.isBlank()) return
+        store.edit { prefs ->
+            prefs[K.PROFILES] = encodeProfiles(parseProfiles(prefs[K.PROFILES]).map {
+                if (it.id == id) it.copy(name = clean) else it
+            })
+        }
+    }
+
+    suspend fun removeProfile(id: String) {
+        val current = profiles()
+        if (current.size <= 1) return
+        val next = current.filterNot { it.id == id }
+        store.edit { prefs ->
+            prefs[K.PROFILES] = encodeProfiles(next)
+            if (prefs[K.ACTIVE_PROFILE] == id) prefs[K.ACTIVE_PROFILE] = next.first().id
+        }
+    }
+
+    private fun encodeProfiles(list: List<HikariProfile>): String {
+        val arr = JSONArray()
+        list.forEach { p ->
+            arr.put(JSONObject().put("id", p.id).put("name", p.name).put("avatar", p.avatarId)
+                .put("bg", p.avatarBackground).put("created", p.createdAt))
+        }
+        return arr.toString()
+    }
+
+    private fun parseProfiles(s: String?): List<HikariProfile> {
+        if (s.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val arr = JSONArray(s)
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val id = o.optString("id")
+                if (id.isBlank()) null else HikariProfile(
+                    id = id, name = o.optString("name").ifBlank { "Profile" },
+                    avatarId = o.optString("avatar").ifBlank { "orb" },
+                    avatarBackground = o.optLong("bg", 0xFF202020), createdAt = o.optLong("created", 0L),
+                )
+            }
+        }.getOrDefault(emptyList())
     }
 
     private fun encodeProviders(list: List<ProviderConfig>): String {

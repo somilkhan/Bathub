@@ -6,24 +6,28 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,12 +62,13 @@ import com.hikari.app.data.CatalogRow
 import com.hikari.app.data.ContentRepository
 import com.hikari.app.data.Logs
 import com.hikari.app.data.MediaItem
+import com.hikari.app.data.HikariProfile
 import com.hikari.app.data.ProviderType
 import com.hikari.app.ui.PosterLoader
 import com.hikari.app.ui.components.ContinueWatchingRow
 import com.hikari.app.ui.components.EmptyState
-import com.hikari.app.ui.components.HeroBanner
-import com.hikari.app.ui.components.MediaRow
+import com.hikari.app.ui.components.HikariCatalogShelf
+import com.hikari.app.ui.components.HikariFeaturedCarousel
 import com.hikari.app.ui.components.ShimmerRow
 import com.hikari.app.ui.navigation.Routes
 import com.hikari.app.providers.ContentProvider
@@ -72,6 +77,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -105,19 +111,27 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val homeCache = LinkedHashMap<String, List<CatalogRow>>()
 
     init {
+        // The Hero picker and More → Extension both write the same persisted
+        // selection. Observe that store value here so either picker immediately
+        // drives Home; previously More only changed DataStore and HomeViewModel
+        // kept its old in-memory selection forever.
         viewModelScope.launch {
-            // Restore the user's last pick ("All" when never picked).
-            _selectedProvider.value = store.homeProvider().ifBlank { null }
-            loadInternal()
+            store.homeProviderFlow()
+                .distinctUntilChanged()
+                .collect { raw ->
+                    val id = raw.ifBlank { null }
+                    if (_selectedProvider.value != id) {
+                        _selectedProvider.value = id
+                        loadInternal()
+                    }
+                }
         }
         viewModelScope.launch {
             manager.providers.collect { ps ->
                 val sel = _selectedProvider.value
                 if (sel != null && ps.none { it.config.enabled && it.config.id == sel }) {
-                    _selectedProvider.value = null
                     store.setHomeProvider("")
                 }
-                loadInternal()
             }
         }
     }
@@ -225,7 +239,9 @@ fun HomeScreen(nav: NavHostController) {
     var showCrash by remember { mutableStateOf(HikariApp.lastCrash != null) }
     var showPicker by remember { mutableStateOf(false) }
     var showTranslate by remember { mutableStateOf(false) }
-    var showSearchDialog by remember { mutableStateOf(false) }
+    var showProfilePicker by remember { mutableStateOf(false) }
+    var showAddProfile by remember { mutableStateOf(false) }
+    var newProfileName by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     // Cloudflare verification: when the selected extension's site is blocked
@@ -243,6 +259,9 @@ fun HomeScreen(nav: NavHostController) {
     }
 
     val app = context.applicationContext as HikariApp
+    val profileStore = app.store
+    val profiles by remember { profileStore.profilesFlow() }.collectAsState(initial = emptyList())
+    val activeProfileId by remember { profileStore.activeProfileFlow() }.collectAsState(initial = "")
     // Continue Watching: history entries that were meaningfully started and
     // aren't within a minute of the end (those read as finished), newest first.
     // IMPORTANT: remember the Flow instances. Building `store.historyFlow()`
@@ -285,16 +304,6 @@ fun HomeScreen(nav: NavHostController) {
     val featured = remember(rows) {
         val first = rows.firstOrNull()?.items.orEmpty()
         (first.filter { !it.backdropUrl.isNullOrBlank() }.ifEmpty { first }).take(8)
-    }
-    val openGlobalSearch: () -> Unit = {
-        Routes.navigateTab(nav, Routes.SEARCH)
-    }
-    // Tapping the header search icon asks HOW to search when a specific
-    // extension's catalog is being browsed: globally across every provider, or
-    // scoped to the extension you're looking at. With no extension selected
-    // there's only one sensible answer, so it goes straight to global search.
-    val openSearch: () -> Unit = {
-        if (selected != null) showSearchDialog = true else openGlobalSearch()
     }
     val openVerify: () -> Unit = {
         scope.launch {
@@ -380,11 +389,12 @@ fun HomeScreen(nav: NavHostController) {
                     }
                 }
             }
-            item {
-                if (featured.isNotEmpty()) {
+            if (featured.isNotEmpty()) {
+                item(key = "featured") {
                     Box(Modifier.fillMaxWidth()) {
-                        HeroBanner(
+                        HikariFeaturedCarousel(
                             items = featured,
+                            sourceName = rows.firstOrNull()?.providerName.orEmpty(),
                             onClick = { item ->
                                 Routes.safeNavigate(
                                     nav,
@@ -396,22 +406,11 @@ fun HomeScreen(nav: NavHostController) {
                             },
                         )
                         HomeHeader(
-                            selected = selected,
-                            onSearch = openSearch,
-                            onTranslate = { showTranslate = true },
-                            onVerify = openVerify,
-                            overlay = true,
+                            onProviderPicker = { showPicker = true },
+                            onProfile = { showProfilePicker = true },
                             modifier = Modifier.align(Alignment.TopCenter),
                         )
                     }
-                } else {
-                    HomeHeader(
-                        selected = selected,
-                        onSearch = openSearch,
-                        onTranslate = { showTranslate = true },
-                        onVerify = openVerify,
-                        overlay = false,
-                    )
                 }
             }
             if (!hideContinue && continueEntries.isNotEmpty()) {
@@ -441,14 +440,17 @@ fun HomeScreen(nav: NavHostController) {
             }
             rows.forEach { row ->
                 item(key = row.key.ifBlank { "${row.providerName}|${row.title}" }) {
-                    MediaRow(
+                    Column(Modifier.padding(vertical = 18.dp)) {
+                    HikariCatalogShelf(
                         title = row.title,
-                        providerName = row.providerName,
                         items = row.items,
                         onClick = { item ->
                             Routes.safeNavigate(
                                 nav,
-                                Routes.detail(item.providerId, item.type, item.id, item.title, item.posterUrl, item.rawType)
+                                Routes.detail(
+                                    item.providerId, item.type, item.id,
+                                    item.title, item.posterUrl, item.rawType
+                                )
                             )
                         },
                         onShowAll = {
@@ -459,8 +461,9 @@ fun HomeScreen(nav: NavHostController) {
                                     row.providerName, row.type, row.rawType
                                 )
                             )
-                        }
+                        },
                     )
+                    }
                 }
             }
             if (rows.isEmpty() && !loading) {
@@ -505,36 +508,63 @@ fun HomeScreen(nav: NavHostController) {
             }
         }
 
-        // Floating source pill (Anikoto-style): shows the current provider and
-        // opens the picker sheet. Sits above the bottom nav bar.
-        Surface(
-            onClick = { showPicker = true },
-            shape = RoundedCornerShape(50),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-        ) {
-            Row(
-                Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Filled.List,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    "  ${selectedName ?: "All providers"}",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+    }
+
+    if (showProfilePicker) {
+        ModalBottomSheet(onDismissRequest = { showProfilePicker = false }) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 12.dp)) {
+                Text("WHO’S WATCHING?", color = Color(0xFF969691), fontSize = 11.sp, letterSpacing = 2.sp)
+                Spacer(Modifier.size(10.dp))
+                profiles.forEach { profile ->
+                    Surface(
+                        onClick = { scope.launch { profileStore.setActiveProfile(profile.id); showProfilePicker = false } },
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (profile.id == activeProfileId) Color(0xFF1B1B1A) else Color.Transparent,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    ) {
+                        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Color(profile.avatarBackground)), contentAlignment = Alignment.Center) {
+                                Text(profile.name.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.SemiBold)
+                            }
+                            Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                                Text(profile.name, fontWeight = FontWeight.Medium)
+                                if (profile.id == activeProfileId) Text("CURRENT PROFILE", color = Color(0xFF8F8F8A), fontSize = 9.sp, letterSpacing = 1.sp)
+                            }
+                            if (profile.id == activeProfileId) Icon(Icons.Filled.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+                HorizontalDivider(color = Color(0xFF2B2B29), modifier = Modifier.padding(vertical = 8.dp))
+                Surface(onClick = { showAddProfile = true }, shape = RoundedCornerShape(14.dp), color = Color.Transparent, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Add, contentDescription = null, tint = Color(0xFF969691), modifier = Modifier.size(28.dp))
+                        Text("Add profile", modifier = Modifier.padding(start = 12.dp))
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
             }
         }
     }
-
+    if (showAddProfile) {
+        AlertDialog(
+            onDismissRequest = { showAddProfile = false },
+            title = { Text("Create profile") },
+            text = { OutlinedTextField(value = newProfileName, onValueChange = { newProfileName = it.take(32) }, singleLine = true, label = { Text("Name") }) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = newProfileName.trim()
+                    if (name.isNotEmpty()) scope.launch {
+                        val p = profileStore.addProfile(name)
+                        profileStore.setActiveProfile(p.id)
+                        newProfileName = ""
+                        showAddProfile = false
+                        showProfilePicker = false
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showAddProfile = false }) { Text("Cancel") } },
+        )
+    }
     if (showPicker) {
         ProviderPickerSheet(
             providers = activeProviders,
@@ -582,33 +612,6 @@ fun HomeScreen(nav: NavHostController) {
         )
     }
 
-    // Search scope chooser: global (every provider, with the provider chips to
-    // narrow it) or scoped to the extension whose catalog is on screen.
-    val searchSel = selected
-    if (showSearchDialog && searchSel != null) {
-        val pname = selectedName ?: "this extension"
-        AlertDialog(
-            onDismissRequest = { showSearchDialog = false },
-            title = { Text("Search") },
-            text = { Text("Search across every provider, or only inside $pname?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showSearchDialog = false
-                    openGlobalSearch()
-                }) {
-                    Text("Global search")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showSearchDialog = false
-                    Routes.safeNavigate(nav, Routes.searchInProvider(searchSel))
-                }) {
-                    Text("In $pname")
-                }
-            },
-        )
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -729,74 +732,30 @@ private fun webUrlFor(p: ContentProvider): String? = when (p.config.type) {
     else -> null
 }
 
-/** The Home top bar. In [overlay] mode it is drawn on top of the hero banner
- *  (white text/icons so it reads over the backdrop art); otherwise it is a
- *  normal, opaque header above the rows. */
+/** Floating HIKARI header over the full-width hero. Search stays in the bottom navigation. */
 @Composable
 private fun HomeHeader(
-    selected: String?,
-    onSearch: () -> Unit,
-    onTranslate: () -> Unit,
-    onVerify: () -> Unit,
-    overlay: Boolean,
+    onProviderPicker: () -> Unit,
+    onProfile: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val accent = MaterialTheme.colorScheme.primary
-    val iconTint = if (overlay) Color.White else accent
-    val subtitleColor =
-        if (overlay) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
-        modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                "Hikari",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = accent,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-            Text(
-                "Every stream, one place.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = subtitleColor,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
+        IconButton(onClick = onProviderPicker) {
+            Icon(Icons.Filled.Menu, contentDescription = "Choose extension", tint = Color.White, modifier = Modifier.size(25.dp))
         }
-        IconButton(onClick = onSearch) {
-            Icon(Icons.Filled.Search, contentDescription = "Search", tint = iconTint)
-        }
-        // Translate: per-extension toggle — turns this extension's titles/text
-        // into English inside the app. Shown whenever a provider is selected.
-        selected?.let { pid ->
-            val translateOn = com.hikari.app.data.Translator.isOn(pid)
-            IconButton(onClick = onTranslate) {
-                Text(
-                    "A\u3042",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = when {
-                        translateOn -> accent
-                        overlay -> Color.White.copy(alpha = 0.7f)
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
-            }
-        }
-        // Cloudflare/verify: opens the extension's site in the WebView so the
-        // user can pass a WAF check once; the catalog reloads by itself after.
-        if (selected != null) {
-            IconButton(onClick = onVerify) {
-                Icon(
-                    Icons.Filled.Public,
-                    contentDescription = "Open site in web view (Cloudflare verification)",
-                    tint = iconTint
-                )
-            }
+        Text(
+            "光  HIKARI",
+            modifier = Modifier.weight(1f),
+            color = Color.White,
+            fontSize = 15.sp,
+            letterSpacing = 4.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        IconButton(onClick = onProfile) {
+            Icon(Icons.Filled.AccountCircle, contentDescription = "Profile", tint = Color.White, modifier = Modifier.size(28.dp))
         }
     }
 }

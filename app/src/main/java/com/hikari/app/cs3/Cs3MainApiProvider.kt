@@ -22,6 +22,7 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.lagradost.cloudstream3.TvType
+import com.lagradost.cloudstream3.fixUrl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,7 +38,90 @@ import java.util.concurrent.ConcurrentHashMap
  * Adapts a loaded CloudStream MainAPI to Hikari's ContentProvider contract so
  * .cs3 plugins appear in Home/Search/Detail/Player like any other provider.
  */
+/**
+ * CloudStream-compatible execution boundary for a loaded MainAPI.
+ *
+ * This intentionally mirrors CloudStream's APIRepository semantics instead of
+ * calling MainAPI directly from the Hikari adapter: provider-specific timeouts,
+ * fixUrl(), homepage throttling/horizontalImages, and bounded loadLinks are
+ * part of the .cs3 runtime contract.
+ */
+private class Cs3ApiRepository(private val api: MainAPI) {
+    private companion object {
+        const val DEFAULT_TIMEOUT = 120_000L
+        const val MAX_TIMEOUT = DEFAULT_TIMEOUT * 4
+        const val MIN_TIMEOUT = 5_000L
+        fun timeout(desired: Long?): Long =
+            (desired ?: DEFAULT_TIMEOUT).coerceIn(MIN_TIMEOUT, MAX_TIMEOUT)
+    }
+
+    private suspend fun <T> bounded(desired: Long?, block: suspend () -> T): T? =
+        try {
+            withTimeoutOrNull(timeout(desired)) { block() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            null
+        }
+
+    private suspend fun waitForHomeDelay() {
+        if (!api.sequentialMainPage) return
+        val delayMs = api.sequentialMainPageDelay
+        if (delayMs <= 0L) return
+        val delta = delayMs + api.lastHomepageRequest - System.currentTimeMillis()
+        if (delta > 0L) kotlinx.coroutines.delay(delta)
+    }
+
+    suspend fun getMainPage(page: Int, data: MainPageData): List<HomePageList> {
+        waitForHomeDelay()
+        api.lastHomepageRequest = System.currentTimeMillis()
+        val response = bounded(api.getMainPageTimeoutMs) {
+            api.getMainPage(
+                page,
+                MainPageRequest(data.name, data.data, data.horizontalImages)
+            )
+        }
+        return response?.items.orEmpty()
+    }
+
+    suspend fun search(query: String, page: Int): List<SearchResponse> {
+        if (query.isEmpty()) return emptyList()
+        return bounded(api.searchTimeoutMs) {
+            try {
+                api.search(query, page)?.items.orEmpty()
+            } catch (e: NotImplementedError) {
+                api.search(query).orEmpty()
+            }
+        }.orEmpty()
+    }
+
+    suspend fun load(url: String): LoadResponse? {
+        if (url.isBlank() || url == "[]" || url == "about:blank") return null
+        val fixedUrl = runCatching { api.fixUrl(url) }.getOrDefault(url)
+        return bounded(api.loadTimeoutMs) { api.load(fixedUrl) }
+    }
+
+    suspend fun loadLinks(
+        data: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (com.lagradost.cloudstream3.utils.ExtractorLink) -> Unit,
+    ): Boolean {
+        if (data.isBlank() || data == "[]" || data == "about:blank") return false
+        return try {
+            withTimeoutOrNull(timeout(api.loadLinksTimeoutMs)) {
+                api.loadLinks(data, false, subtitleCallback, callback)
+            } ?: false
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            false
+        }
+    }
+}
+
 class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider {
+
+    private fun repository(a: MainAPI): Cs3ApiRepository = Cs3ApiRepository(a)
 
     companion object {
         /**
@@ -337,15 +421,12 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
                 if (System.currentTimeMillis() - at < HOME_ROWS_TTL_MS) return rows
             }
         }
-        val resp = try {
-            a.getMainPage(pageNumber, MainPageRequest(page.name, page.data, false))
+        val rows = try {
+            repository(a).getMainPage(pageNumber, page)
         } catch (e: Throwable) {
             if (e is CancellationException) throw e
-            // A brand-new plugin instance can fail its very first network call
-            // while the runtime/session initializes — retry once.
-            a.getMainPage(pageNumber, MainPageRequest(page.name, page.data, false))
+            repository(a).getMainPage(pageNumber, page)
         }
-        val rows = resp?.items.orEmpty()
         if (pageNumber == 1) homePageCache[key] = System.currentTimeMillis() to rows
         return rows
     }
@@ -382,34 +463,49 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
                     catalogErrors[config.id] = fullCause(e)
                     return@withContext emptyList()
                 }
-                val row = rows.getOrNull(rowIndex) ?: rows.firstOrNull()
-                val rowItems = row?.list.orEmpty().mapNotNull { it.toMediaItem() }
+                // This ref was created from this exact row index in catalogs().
+                // Preserve that identity first: duplicate row names are legal, and
+                // providers may return multiple rows with the same display name.
+                // Only fall back to name matching if the original index disappeared.
+                val row = rows.getOrNull(rowIndex)
+                    ?: rows.firstOrNull { candidate ->
+                        candidate.name.isNotBlank() && candidate.name == ref.name
+                    }
+                    ?: rows.firstOrNull()
+                val rawItems = row?.list.orEmpty()
+                val rowItems = rawItems.mapNotNull { it.toMediaItem() }
                 if (rowItems.isEmpty()) {
-                    catalogErrors[config.id] = "No items in ${ref.name}"
+                    val reason = if (rawItems.isEmpty()) {
+                        "CloudStream home row returned 0 items"
+                    } else {
+                        "CloudStream home row returned ${rawItems.size} items but Hikari could not map any of them"
+                    }
+                    catalogErrors[config.id] = "$reason: ${ref.name}"
+                    val sample = rawItems.take(3).joinToString(" || ") { item ->
+                        "${item::class.java.simpleName}{name='${item.name}',url='${item.url}',poster='${item.posterUrl}'}"
+                    }
+                    com.hikari.app.data.Logs.log(
+                        "Provider",
+                        "${config.name}: home catalog '${ref.name}' empty; rows=${rows.size}, rawItems=${rawItems.size}, mapped=${rowItems.size}; sample=$sample"
+                    )
                 } else {
                     catalogErrors.remove(config.id)
                 }
                 return@withContext rowItems
             }
-            val resp = try {
-                a.getMainPage(page, MainPageRequest(ref.name, ref.id, false))
+            val rows = try {
+                repository(a).getMainPage(page, MainPageData(ref.name, ref.id, false))
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
-                // A brand-new plugin instance can fail its very first network
-                // call while the runtime/session initializes — retry once.
                 try {
-                    a.getMainPage(page, MainPageRequest(ref.name, ref.id, false))
+                    repository(a).getMainPage(page, MainPageData(ref.name, ref.id, false))
                 } catch (e2: Throwable) {
                     if (e2 is CancellationException) throw e2
                     catalogErrors[config.id] = fullCause(e2)
                     return@withContext emptyList()
                 }
             }
-            if (resp == null) {
-                catalogErrors[config.id] = "getMainPage returned null for ${ref.id}"
-                return@withContext emptyList()
-            }
-            val items = resp.items.orEmpty().flatMap { row ->
+            val items = rows.flatMap { row ->
                 row.list.orEmpty().mapNotNull { it.toMediaItem() }
             }
             if (items.isEmpty()) {
@@ -478,10 +574,10 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
      *  calling the paginated form first is correct for BOTH generations. */
     private suspend fun searchItems(a: MainAPI, query: String, page: Int): List<SearchResponse> {
         return try {
-            a.search(query, page)?.items.orEmpty()
+            repository(a).search(query, page)
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
-            a.search(query).orEmpty()
+            repository(a).search(query, page)
         }
     }
 
@@ -502,6 +598,34 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
     }
 
     override suspend fun getMeta(item: MediaItem): MediaItem {
+        // Some home rows expose a title/poster but no canonical URL. Resolve
+        // those synthetic home ids through the provider's normal title search,
+        // then continue through the regular load() path.
+        if (item.id.startsWith("hikari-home:")) {
+            val encoded = item.id.removePrefix("hikari-home:")
+            val title = runCatching {
+                String(
+                    android.util.Base64.decode(encoded, android.util.Base64.NO_WRAP),
+                    Charsets.UTF_8,
+                )
+            }.getOrNull()
+            if (!title.isNullOrBlank()) {
+                val resolved = runCatching {
+                    searchItems(api ?: return@runCatching null, title, 1)
+                        .firstOrNull { it.name.equals(title, ignoreCase = true) && it.url.isNotBlank() }
+                        ?: searchItems(api ?: return@runCatching null, title, 1).firstOrNull { it.url.isNotBlank() }
+                }.getOrNull()
+                if (resolved != null) {
+                    val resolvedItem = resolved.toMediaItem()
+                    if (resolvedItem != null && resolvedItem.id != item.id) {
+                        return getMeta(resolvedItem).copy(
+                            title = item.title.ifBlank { resolvedItem.title },
+                            posterUrl = item.posterUrl ?: resolvedItem.posterUrl,
+                        )
+                    }
+                }
+            }
+        }
         // Always run the provider's load() and correct the type from the actual
         // LoadResponse — many plugins report a broad/odd TvType on their search
         // results (e.g. NSFW) that would otherwise leave the detail screen with
@@ -652,7 +776,7 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
                         suspend fun runOnce(budget: Long, url: String) {
                             val s = System.currentTimeMillis()
                             completed = withTimeoutOrNull(budget) {
-                                a.loadLinks(url, false, { subs.add(it) }, { links.add(it) })
+                                repository(a).loadLinks(url, { subs.add(it) }, { links.add(it) })
                             }
                             elapsedMs += System.currentTimeMillis() - s
                         }
@@ -1040,7 +1164,7 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
 
     /** One load() attempt, treating a plugin crash as a miss (never throwing). */
     private suspend fun tryLoad(a: MainAPI, id: String): LoadResponse? = try {
-        a.load(id)
+        repository(a).load(id)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Throwable) {
@@ -1072,7 +1196,24 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
     }
 
     private fun SearchResponse.toMediaItem(): MediaItem? {
-        if (url.isBlank() || name.isBlank()) return null
+        // HomePageList entries are valid CloudStream SearchResponse objects even
+        // when a provider leaves the display name empty. Do not discard a whole
+        // row just because name is blank: the canonical URL is still enough to
+        // open the title, and we can derive a readable fallback for the card.
+        val displayName = name.trim().ifBlank {
+            url.substringAfterLast('/').substringBefore('?').substringBefore('#')
+                .replace('-', ' ').replace('_', ' ').trim()
+        }.ifBlank {
+            posterUrl?.substringAfterLast('/')?.substringBefore('?')?.substringBefore('#')
+                ?.replace('-', ' ')?.replace('_', ' ')?.trim().orEmpty()
+        }.ifBlank { "Untitled" }
+        val itemId = url.takeIf { it.isNotBlank() } ?: run {
+            val encoded = android.util.Base64.encodeToString(
+                displayName.toByteArray(Charsets.UTF_8),
+                android.util.Base64.NO_WRAP,
+            )
+            "hikari-home:$encoded"
+        }
         val mt = when (type) {
             // NSFW providers (LeakPorner, KanAV, …) label their single-video
             // results NSFW — treat as movies; getMeta later corrects actor
@@ -1089,8 +1230,8 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
         }
         return MediaItem(
             providerId = config.id,
-            id = url,
-            title = name,
+            id = itemId,
+            title = displayName,
             type = mt,
             posterUrl = posterUrl,
             year = year,

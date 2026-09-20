@@ -13,7 +13,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 
 enum class HikariThemeMode(val key: String, val label: String) {
-    DARK("dark", "Hikari Dark"),
+    DARK("dark", "Gotham"),
     GLASS("glass", "Dark Glass UI"),
     LIGHT("light", "Hikari Light");
 

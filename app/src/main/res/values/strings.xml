@@ -1,3 +1,18 @@
 <resources>
     <string name="app_name">Hikari</string>
+
+    <!-- CloudStream player resource bridge -->
+    <string name="cs_autoplay_next_key">cs_autoplay_next</string>
+    <string name="cs_go_back">Back</string>
+    <string name="cs_ok">OK</string>
+    <string name="cs_play_torrent_button">Play torrent</string>
+    <string name="cs_prefer_media_type_key">cs_prefer_media_type</string>
+    <string name="cs_quality_pref_key">cs_quality</string>
+    <string name="cs_quality_pref_mobile_data_key">cs_quality_mobile</string>
+    <string name="cs_software_decoding_key">cs_software_decoding</string>
+    <string name="cs_torrent_info">This source is a torrent. Continue?</string>
+    <string name="cs_torrent_not_accepted">Torrent playback was not accepted.</string>
+    <string name="cs_torrent_preferred_media">Torrent playback is disabled by the current media preference.</string>
+    <string name="cs_subtitles_encoding_key">cs_subtitles_encoding</string>
+    <string name="cs_preview_seekbar_key">cs_preview_seekbar</string>
 </resources>

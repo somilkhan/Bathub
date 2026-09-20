@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -21,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -71,6 +73,21 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+
+@Composable
+private fun FilterDropdown(label: String, onClick: () -> Unit) {
+    androidx.compose.material3.Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+    ) {
+        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Icon(Icons.Filled.ExpandMore, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
 
 @OptIn(FlowPreview::class)
 class SearchViewModel(
@@ -162,6 +179,9 @@ fun SearchScreen(
     val searching by vm.searching.collectAsState()
     val selected by vm.selectedProviders.collectAsState()
     val providers by vm.providers.collectAsState()
+    var typeFilter by rememberSaveable { mutableStateOf("All types") }
+    var sourceMenu by remember { mutableStateOf(false) }
+    var typeMenu by remember { mutableStateOf(false) }
 
     // Search-bar translator state: the text the user typed before translating
     // (null while showing English), the current target language, the language
@@ -257,67 +277,24 @@ fun SearchScreen(
                 }
             }
         )
-        if (providers.isNotEmpty()) {
-            Column {
-                var providerFilter by remember { mutableStateOf("") }
-                val visibleProviders = remember(providers, providerFilter) {
-                    val f = providerFilter.trim()
-                    if (f.isEmpty()) providers
-                    else providers.filter { it.config.name.contains(f, ignoreCase = true) }
-                }
-                if (providers.size > 5) {
-                    // With many extensions installed the chip row is unusable —
-                    // a mini search box narrows it to the ones you mean.
-                    GlassSearchField(
-                        value = providerFilter,
-                        onValueChange = { providerFilter = it },
-                        placeholder = "Filter providers…",
-                        height = 44.dp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 2.dp)
-                    )
-                }
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        FilterChip(
-                            selected = selected.isEmpty(),
-                            onClick = { vm.selectAll() },
-                            label = { Text("All") },
-                            shape = RoundedCornerShape(24.dp),
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                selectedLabelColor = MaterialTheme.colorScheme.primary,
-                            )
-                        )
-                    }
-                    items(visibleProviders, key = { it.config.id }) { p ->
-                        FilterChip(
-                            selected = p.config.id in selected,
-                            onClick = { vm.toggleProvider(p.config.id) },
-                            label = { Text(p.config.name) },
-                            shape = RoundedCornerShape(24.dp),
-                            colors = FilterChipDefaults.filterChipColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                selectedLabelColor = MaterialTheme.colorScheme.primary,
-                            )
-                        )
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.weight(1f)) {
+                FilterDropdown(label = typeFilter, onClick = { typeMenu = true })
+                DropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
+                    listOf("All types", "Movie", "TV", "Anime").forEach { type ->
+                        DropdownMenuItem(text = { Text(type) }, onClick = { typeFilter = type; typeMenu = false })
                     }
                 }
-                Text(
-                    if (selected.isEmpty()) "Searching every source"
-                    else "${selected.size} source${if (selected.size == 1) "" else "s"} selected",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
-                )
+            }
+            Box(Modifier.weight(1f)) {
+                val sourceLabel = if (selected.isEmpty()) "All sources" else providers.firstOrNull { it.config.id in selected }?.config?.name ?: "Selected sources"
+                FilterDropdown(label = sourceLabel, onClick = { sourceMenu = true })
+                DropdownMenu(expanded = sourceMenu, onDismissRequest = { sourceMenu = false }) {
+                    DropdownMenuItem(text = { Text("All sources") }, onClick = { vm.selectAll(); sourceMenu = false })
+                    providers.forEach { provider ->
+                        DropdownMenuItem(text = { Text(provider.config.name) }, onClick = { vm.selectProvider(provider.config.id); sourceMenu = false })
+                    }
+                }
             }
         }
         if (searching) {
@@ -338,6 +315,14 @@ fun SearchScreen(
                 action = null
             )
         } else {
+            val filteredResults = results.filter { item ->
+                when (typeFilter) {
+                    "Movie" -> item.type == com.hikari.app.data.MediaType.MOVIE
+                    "TV" -> item.type == com.hikari.app.data.MediaType.SERIES
+                    "Anime" -> item.rawType.contains("anime", ignoreCase = true) || item.genres.any { it.contains("anime", ignoreCase = true) }
+                    else -> true
+                }
+            }
             val namesById = providers.associateBy({ it.config.id }, { it.config.name })
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
@@ -346,7 +331,7 @@ fun SearchScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(results, key = { it.uniqueId }) { item ->
+                items(filteredResults, key = { it.uniqueId }) { item ->
                     Column(
                         Modifier
                             .clip(RoundedCornerShape(10.dp))

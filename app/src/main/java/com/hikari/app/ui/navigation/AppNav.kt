@@ -2,13 +2,21 @@ package com.hikari.app.ui.navigation
 
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
@@ -19,20 +27,25 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
@@ -57,7 +70,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.hikari.app.HikariApp
 import com.hikari.app.data.MediaType
+import com.hikari.app.data.HikariProfile
 import com.hikari.app.ui.screens.CatalogScreen
+import com.hikari.app.ui.components.HikariSplash
 import com.hikari.app.ui.screens.DetailScreen
 import com.hikari.app.ui.screens.DownloadsScreen
 import com.hikari.app.ui.screens.ExtensionsScreen
@@ -68,6 +83,8 @@ import com.hikari.app.ui.screens.SearchScreen
 import com.hikari.app.ui.screens.SettingsScreen
 import com.hikari.app.ui.theme.HikariThemeMode
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 object Routes {
     const val HOME = "home"
@@ -184,77 +201,70 @@ object Routes {
     }
 }
 
-
 @Composable
 private fun AppBottomBar(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
+    onMore: () -> Unit,
 ) {
-    val primary = MaterialTheme.colorScheme.primary
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    // Equal slots are not much room, and the labels ("Downloads", "Extensions")
-    // are the longest text in the app. On a phone whose accessibility Font size
-    // AND/OR Display size is turned up, the labels grew past their slot and were
-    // hard-clipped mid-word ("Downloa"). Size the label so it always renders at
-    // the SAME physical size — dividing out the font scale — and the worst case
-    // is then a full word in a slightly tight slot. (When "In-app UI scale" is
-    // on, fontScale is 1 here and the scale rides on the density, so the labels
-    // still scale with that setting.) With the Library tab there are seven
-    // slots, so the base size drops a notch to keep every label whole.
-    val labelScale = LocalDensity.current.fontScale.coerceAtLeast(0.5f)
-    val labelSp = if (Tabs.size > 6) 8f else 9f
+    val primary = Color(0xFFEDEDE8)
+    val muted = Color(0xFF8C8C88)
+    val selectedSurface = Color(0xFF1D1D1B)
     Box(
         Modifier
             .fillMaxWidth()
-            // Keep the floating bar clear of the gesture/navigation bar when the
-            // system bars are visible (they are hidden while immersive, so this
-            // is 0 in the normal case and simply lifts the bar when they show).
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 8.dp, vertical = 10.dp)
+            .padding(horizontal = 26.dp, vertical = 12.dp)
     ) {
         Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-            shadowElevation = 10.dp,
+            shape = RoundedCornerShape(30.dp),
+            color = Color(0xF0141413),
+            border = BorderStroke(1.dp, Color(0xFF30302E)),
+            shadowElevation = 0.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(60.dp)
-                    .padding(horizontal = 2.dp, vertical = 6.dp),
+                Modifier.fillMaxWidth().height(62.dp).padding(horizontal = 5.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Tabs.forEach { tab ->
                     val selected = currentRoute == tab.route
                     Column(
-                        Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .clip(RoundedCornerShape(22.dp))
-                            .background(if (selected) primary.copy(alpha = 0.16f) else Color.Transparent)
-                            .clickable { onNavigate(tab.route) },
+                        Modifier.weight(1f).height(50.dp).clip(RoundedCornerShape(22.dp))
+                            .background(if (selected) selectedSurface else Color.Transparent)
+                            .clickable { if (tab.route == MORE_ROUTE) onMore() else onNavigate(tab.route) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            tab.icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = if (selected) primary else muted
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            tab.label,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                            fontSize = (labelSp / labelScale).sp,
-                            textAlign = TextAlign.Center,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selected) primary else muted,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        AnimatedContent(
+                            targetState = selected,
+                            transitionSpec = {
+                                (fadeIn() + scaleIn(initialScale = 0.78f)).togetherWith(fadeOut())
+                            },
+                            label = "nav_icon_\${tab.label}"
+                        ) { active ->
+                            Icon(
+                                tab.icon,
+                                contentDescription = tab.label,
+                                modifier = Modifier.size(if (active) 21.dp else 20.dp),
+                                tint = if (active) primary else muted
+                            )
+                        }
+                        AnimatedVisibility(
+                            visible = selected,
+                            enter = fadeIn() + scaleIn(initialScale = 0.86f),
+                            exit = fadeOut() + androidx.compose.animation.scaleOut(targetScale = 0.86f),
+                            label = "nav_label_\${tab.label}"
+                        ) {
+                            Text(
+                                tab.label.uppercase(),
+                                fontSize = 8.sp,
+                                letterSpacing = 0.8.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = primary,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -262,22 +272,80 @@ private fun AppBottomBar(
     }
 }
 
+
+@Composable
+private fun HikariLaunchProfilePicker(
+    profiles: List<HikariProfile>,
+    onSelect: (HikariProfile) -> Unit,
+    onAdd: () -> Unit,
+) {
+    Box(Modifier.fillMaxSize().background(Color(0xFF0A0A0A)), contentAlignment = Alignment.Center) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("WHO’S WATCHING?", color = Color(0xFFF1F1ED), fontSize = 13.sp, letterSpacing = 2.4.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(8.dp))
+            Text("Choose a profile to continue", color = Color(0xFF858581), fontSize = 12.sp)
+            Spacer(Modifier.height(34.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                profiles.forEach { profile ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(82.dp).clickable { onSelect(profile) }) {
+                        Box(Modifier.size(72.dp).clip(RoundedCornerShape(22.dp)).background(Color(profile.avatarBackground)), contentAlignment = Alignment.Center) {
+                            Text(profile.name.take(1).uppercase(), color = Color(0xFFF1F1ED), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Text(profile.name.uppercase(), color = Color(0xFFEDEDE8), fontSize = 9.sp, letterSpacing = 1.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(82.dp).clickable { onAdd() }) {
+                    Box(Modifier.size(72.dp).clip(RoundedCornerShape(22.dp)).background(Color(0xFF151515)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Add, contentDescription = "Add profile", tint = Color(0xFF8F8F8A), modifier = Modifier.size(28.dp))
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text("ADD PROFILE", color = Color(0xFF8F8F8A), fontSize = 9.sp, letterSpacing = 1.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MoreSheetItem(
+    label: String,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Text(
+            label.uppercase(),
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 13.sp,
+            letterSpacing = 1.2.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 17.dp),
+        )
+    }
+}
+
+
 private data class Tab(
     val route: String,
     val label: String,
     val icon: ImageVector,
 )
 
+private const val MORE_ROUTE = "more"
+
 private val Tabs = listOf(
     Tab(Routes.HOME, "Home", Icons.Filled.Home),
     Tab(Routes.SEARCH, "Search", Icons.Filled.Search),
     Tab(Routes.LIBRARY, "Library", Icons.Filled.Favorite),
-    Tab(Routes.HISTORY, "History", Icons.Filled.History),
     Tab(Routes.DOWNLOADS, "Downloads", Icons.Filled.Download),
-    Tab(Routes.EXTENSIONS, "Extensions", Icons.Filled.Extension),
-    Tab(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
+    Tab(MORE_ROUTE, "More", Icons.Filled.MoreHoriz),
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     val nav = rememberNavController()
@@ -288,11 +356,25 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     // its base path.
     val tabRoute = Routes.tabBaseOf(currentRoute)
     val showBar = tabRoute in Tabs.map { it.route }
-
+    var showMoreSheet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showExtensionSwitch by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showHikariSplash by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+    var showProfilePicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showAddProfile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var newProfileName by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
     // The WebView's "Go to app home" menu item bumps this — landing on the
     // app's own Home tab (not the website's home page).
     val context = LocalContext.current
+    val profileStore = (context.applicationContext as HikariApp).store
+    val hikariApp = context.applicationContext as HikariApp
+    val extensionProviders by hikariApp.providers.providers.collectAsState()
+    val profileFlow = androidx.compose.runtime.remember { profileStore.profilesFlow() }
+    val profiles by profileFlow.collectAsState(initial = emptyList())
+    val profileScope = rememberCoroutineScope()
     val homeRequest by (context.applicationContext as HikariApp).homeTabRequest.collectAsState()
+    LaunchedEffect(Unit) {
+        profileStore.ensureDefaultProfile()
+    }
     LaunchedEffect(homeRequest) {
         if (homeRequest > 0) Routes.navigateTab(nav, Routes.HOME)
     }
@@ -340,7 +422,8 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
             if (showBar) {
                 AppBottomBar(
                     currentRoute = tabRoute,
-                    onNavigate = { route -> Routes.navigateTab(nav, route) }
+                    onNavigate = { route -> Routes.navigateTab(nav, route) },
+                    onMore = { showMoreSheet = true },
                 )
             }
         }
@@ -416,5 +499,98 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
             }
         }
         }
+
+        if (showMoreSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showMoreSheet = false },
+                containerColor = MaterialTheme.colorScheme.surface,
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("MORE", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp,
+                        letterSpacing = 2.sp, fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(bottom = 8.dp))
+                    MoreSheetItem("Extension") { showMoreSheet = false; showExtensionSwitch = true }
+                    MoreSheetItem("History") { showMoreSheet = false; Routes.safeNavigate(nav, Routes.HISTORY) }
+                    MoreSheetItem("Extensions") { showMoreSheet = false; Routes.safeNavigate(nav, Routes.EXTENSIONS) }
+                    MoreSheetItem("Settings") { showMoreSheet = false; Routes.safeNavigate(nav, Routes.SETTINGS) }
+                    Spacer(Modifier.height(18.dp))
+                }
+            }
+        }
+    if (showExtensionSwitch) {
+        ModalBottomSheet(
+            onDismissRequest = { showExtensionSwitch = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    "EXTENSION",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 12.sp,
+                    letterSpacing = 2.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                MoreSheetItem("All Extensions") {
+                    profileScope.launch { profileStore.setHomeProvider("") }
+                    showExtensionSwitch = false
+                }
+                extensionProviders
+                    .filter { it.config.enabled }
+                    .sortedBy { it.config.name.lowercase() }
+                    .forEach { provider ->
+                        MoreSheetItem(provider.config.name) {
+                            profileScope.launch { profileStore.setHomeProvider(provider.config.id) }
+                            showExtensionSwitch = false
+                        }
+                    }
+                Spacer(Modifier.height(18.dp))
+            }
+        }
+    }
+    if (showHikariSplash) {
+        HikariSplash(onFinished = { showHikariSplash = false; showProfilePicker = true })
+    }
+    if (showProfilePicker && !showHikariSplash) {
+        HikariLaunchProfilePicker(
+            profiles = profiles,
+            onSelect = { profile -> profileScope.launch { profileStore.setActiveProfile(profile.id); showProfilePicker = false } },
+            onAdd = { showAddProfile = true },
+        )
+    }
+    if (showAddProfile) {
+        AlertDialog(
+            onDismissRequest = { showAddProfile = false },
+            title = { Text("Create profile") },
+            text = {
+                OutlinedTextField(
+                    value = newProfileName,
+                    onValueChange = { newProfileName = it.take(32) },
+                    singleLine = true,
+                    label = { Text("Name") },
+                    placeholder = { Text("Profile name") },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = newProfileName.trim()
+                    if (name.isNotEmpty()) profileScope.launch {
+                        val p = profileStore.addProfile(name)
+                        profileStore.setActiveProfile(p.id)
+                        newProfileName = ""
+                        showAddProfile = false
+                        showProfilePicker = false
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showAddProfile = false }) { Text("Cancel") } },
+        )
+    }
     }
 }

@@ -1,0 +1,43 @@
+package com.lagradost.cloudstream3
+
+/**
+ * Resource bridge for the CloudStream player classes bundled as a jar.
+ *
+ * The jar's Android R class is intentionally stripped during packaging because
+ * Hikari owns the application resources. These fields point the compiled
+ * CloudStream player at equivalent Hikari resource keys.
+ */
+object R {
+    object string {
+        @JvmField val autoplay_next_key = com.hikari.app.R.string.cs_autoplay_next_key
+        @JvmField val go_back = com.hikari.app.R.string.cs_go_back
+        @JvmField val ok = com.hikari.app.R.string.cs_ok
+        @JvmField val play_torrent_button = com.hikari.app.R.string.cs_play_torrent_button
+        @JvmField val prefer_media_type_key = com.hikari.app.R.string.cs_prefer_media_type_key
+        @JvmField val quality_pref_key = com.hikari.app.R.string.cs_quality_pref_key
+        @JvmField val quality_pref_mobile_data_key = com.hikari.app.R.string.cs_quality_pref_mobile_data_key
+        @JvmField val software_decoding_key = com.hikari.app.R.string.cs_software_decoding_key
+        @JvmField val torrent_info = com.hikari.app.R.string.cs_torrent_info
+        @JvmField val torrent_not_accepted = com.hikari.app.R.string.cs_torrent_not_accepted
+        @JvmField val torrent_preferred_media = com.hikari.app.R.string.cs_torrent_preferred_media
+        @JvmField val subtitles_encoding_key = com.hikari.app.R.string.cs_subtitles_encoding_key
+        @JvmField val preview_seekbar_key = com.hikari.app.R.string.cs_preview_seekbar_key
+    }
+
+    object font {
+        @JvmField val trebuchet_ms = 0
+        @JvmField val netflix_sans = 0
+        @JvmField val google_sans = 0
+        @JvmField val open_sans = 0
+        @JvmField val futura = 0
+        @JvmField val consola = 0
+        @JvmField val gotham = 0
+        @JvmField val lucida_grande = 0
+        @JvmField val stix_general = 0
+        @JvmField val times_new_roman = 0
+        @JvmField val verdana = 0
+        @JvmField val ubuntu_regular = 0
+        @JvmField val comic_sans = 0
+        @JvmField val poppins_regular = 0
+    }
+}

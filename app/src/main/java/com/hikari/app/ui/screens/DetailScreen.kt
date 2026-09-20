@@ -12,6 +12,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
@@ -78,6 +79,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -278,6 +280,11 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
     private val _liveStreams = MutableStateFlow<List<StreamSource>>(emptyList())
     val liveStreams: StateFlow<List<StreamSource>> = _liveStreams.asStateFlow()
 
+    /** Receives source batches that arrive after the screen's foreground
+     * collector has finished, e.g. from a background continuation sweep. */
+    @Volatile
+    var liveSink: (suspend (List<StreamSource>) -> Unit)? = null
+
     /** How many addons were asked for sources on the last lookup. */
     private val _searchedProviders = MutableStateFlow(0)
     val searchedProviders: StateFlow<Int> = _searchedProviders.asStateFlow()
@@ -454,8 +461,13 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
             // what makes a Play tap instant right after the detail page opened).
             // A fresh list is safe to mirror onto the live feed, because those
             // signed links still work.
-            val fresh = System.currentTimeMillis() - cached.at < STREAM_CACHE_TTL_MS
-            if (!force && (cached.list.isEmpty() || fresh)) {
+            val age = System.currentTimeMillis() - cached.at
+            val fresh = if (cached.list.isEmpty()) {
+                age < EMPTY_STREAM_CACHE_TTL_MS
+            } else {
+                age < STREAM_CACHE_TTL_MS
+            }
+            if (!force && fresh) {
                 com.hikari.app.data.Logs.log(
                     "Search",
                     "cache hit \"${item.title}\" (${if (fresh) "fresh" else "empty"}) " +
@@ -494,6 +506,7 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
             val feed: (suspend (List<StreamSource>) -> Unit) = { partial ->
                 _liveStreams.value = partial
                 onProgress?.invoke(partial)
+                liveSink?.invoke(partial)
             }
             val result = withContext(Dispatchers.IO) {
                 runCatching { repo.streamsFor(item, ep, feed) }.getOrDefault(emptyList())
@@ -610,6 +623,7 @@ private const val PREFERRED_GRACE_MS = 10_000L
  *  is comfortably under the rotation window while still making an immediate
  *  Play tap instant. */
 private const val STREAM_CACHE_TTL_MS = 300_000L
+private const val EMPTY_STREAM_CACHE_TTL_MS = 15_000L
 
 /** How long a Play tap made while episodes are still loading waits for the
  *  episode list before falling back to a movie-style search. The player is
@@ -770,6 +784,8 @@ fun DetailScreen(
     // server either — the chooser should come up the moment servers exist.
     val askServerFlow = remember { app.store.askServerOnPlayFlow() }
     val askServerOnPlay by askServerFlow.collectAsState(initial = false)
+    val playerEngineFlow = remember { app.store.playerEngineFlow() }
+    val playerEngine by playerEngineFlow.collectAsState(initial = "hikari")
     // Servers the player must know about before it starts. 1 = "as soon as the
     // first server is found" (the default).
     val startAfterServers = if (playWaitServers) playMinServers else 1
@@ -852,6 +868,7 @@ fun DetailScreen(
                 // Ask before playing: the player shows every server it found,
                 // grouped by engine, instead of starting one by itself.
                 putExtra("askServer", askServerOnPlay)
+                putExtra("playerEngine", playerEngine)
                 putExtra("histEpisodeId", ep?.id.orEmpty())
                 putExtra("histEpisodeName", ep?.name.orEmpty())
                 putExtra("histEpisodeSeason", ep?.season ?: 0)
@@ -868,7 +885,18 @@ fun DetailScreen(
         // Never leave the guard stuck ON if the launch itself fails (e.g. the
         // player activity can't be resolved): report failure so the caller can
         // fall back to the source sheet instead of a dead tap.
-        return@launchPlayer runCatching { playerLauncher.launch(intent) }
+        return@launchPlayer runCatching {
+            val selectedEngine = playerEngine
+            val launchIntent = if (selectedEngine == "cloudstream") {
+                Intent(context, com.hikari.app.player.Cs3PlayerActivity::class.java).apply {
+                    putExtras(intent)
+                }
+            } else {
+                intent
+            }
+            com.hikari.app.data.Logs.log("Player", "launch engine=$selectedEngine")
+            playerLauncher.launch(launchIntent)
+        }
             .fold(onSuccess = { true }, onFailure = { playerLaunched = false; false })
     }
 
@@ -917,6 +945,15 @@ fun DetailScreen(
         // server" dialog shows every source from every installed provider.
         sessionId = UUID.randomUUID().toString()
         vm.resetLiveStreams()
+        // Keep late/background source results connected to this play session.
+        vm.liveSink = { partial ->
+            if (playerLaunched) {
+                val playable = partial.filter { s ->
+                    s.ytId == null && !s.externalUrl && (s.url.isNotBlank() || s.isTorrent)
+                }
+                if (playable.isNotEmpty()) StreamsLive.append(sessionId, playable)
+            }
+        }
         // Launch the player NOW with an empty source list — it shows its own
         // title card and waits for the first servers on [sessionId]. If the
         // launch itself fails (the activity can't be resolved), the coroutine
@@ -1164,84 +1201,17 @@ fun DetailScreen(
                 LazyColumn(Modifier.fillMaxSize()) {
                     item {
                     Column(Modifier.padding(horizontal = 16.dp)) {
-                        Text(
-                            m?.title ?: title,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (m?.year != null) {
-                            Text(
-                                "${m.year}  ·  ${m.type.name.lowercase()}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
                         if (!m?.genres.isNullOrEmpty()) {
-                            Row(
-                                Modifier.padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
+                            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 m!!.genres.take(4).forEach { g ->
-                                    // Tapping a tag asks WHERE to search:
-                                    // "Search" stays inside this title's own
-                                    // extension, "Global search" fans out to
-                                    // every installed provider. Keeping both on
-                                    // the pill means one tap is still enough to
-                                    // discover the choice, without hijacking the
-                                    // tap to a single behaviour.
-                                    var tagOpen by remember { mutableStateOf(false) }
-                                    Box {
-                                        Row(
-                                            Modifier
-                                                .clip(RoundedCornerShape(20.dp))
-                                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                                .clickable { tagOpen = true }
-                                                .padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                g,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                            Spacer(Modifier.width(2.dp))
-                                            Icon(
-                                                Icons.Filled.ArrowDropDown,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                        DropdownMenu(
-                                            expanded = tagOpen,
-                                            onDismissRequest = { tagOpen = false }
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text("Search") },
-                                                leadingIcon = {
-                                                    Icon(Icons.Filled.Search, contentDescription = null)
-                                                },
-                                                onClick = {
-                                                    tagOpen = false
-                                                    Routes.safeNavigate(
-                                                        nav,
-                                                        Routes.searchInProvider(livePid, g)
-                                                    )
-                                                }
-                                            )
-                                            DropdownMenuItem(
-                                                text = { Text("Global search") },
-                                                leadingIcon = {
-                                                    Icon(Icons.Filled.Public, contentDescription = null)
-                                                },
-                                                onClick = {
-                                                    tagOpen = false
-                                                    Routes.safeNavigate(nav, Routes.searchQuery(g))
-                                                }
-                                            )
-                                        }
-                                    }
+                                    Text(
+                                        g.uppercase(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.White.copy(alpha = 0.82f),
+                                        modifier = Modifier
+                                            .border(0.5.dp, Color.White.copy(alpha = 0.30f))
+                                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                                    )
                                 }
                             }
                         }
@@ -1877,6 +1847,8 @@ private fun playerPayload(streams: List<StreamSource>): String? = runCatching {
                     // "Select server", and starts playback on its server.
                     .put("providerId", s.providerId)
                     .put("providerName", s.providerName)
+                    .put("ytId", s.ytId ?: "")
+                    .put("externalUrl", s.externalUrl)
                     .put("infoHash", s.infoHash ?: "")
                     .put("fileIdx", s.fileIdx ?: -1)
                     .put(
@@ -1913,44 +1885,38 @@ private fun playerPayload(streams: List<StreamSource>): String? = runCatching {
 
 @Composable
 private fun Hero(meta: MediaItem?, fallbackPoster: String?, onBack: () -> Unit) {
-    // A wide 16:9 banner — the same shape as the Home carousel and the Nuvio
-    // detail page — instead of the old 240dp letterbox, which cropped the sides
-    // off wide art and showed a blurry poster strip instead. With a full
-    // 16:9 frame nothing is cut off at the top, and the bottom of the art fades
-    // into the page background.
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .aspectRatio(16f / 9f)
-    ) {
-        // Item's own backdrop → the wide art we looked up → its poster, so a
-        // title an extension left blank still gets a real banner here. The
-        // wide/poster distinction matters: a portrait poster is never
-        // centre-cropped into this 16:9 frame (that is what cut the art off).
-        val (img, wide) = meta?.let { Artwork.heroModel(it) }
-            ?: (PosterLoader.model(fallbackPoster) to false)
-        HeroArtwork(
-            model = img,
-            wide = wide,
-            modifier = Modifier.fillMaxSize(),
-        )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.55f to Color.Transparent,
-                        1f to MaterialTheme.colorScheme.background
-                    )
-                )
-        )
-        IconButton(onClick = onBack, modifier = Modifier.padding(4.dp)) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = Color.White
-            )
+    val title = meta?.title.orEmpty()
+    val metadata = buildString {
+        meta?.year?.let { append(it) }
+        meta?.type?.let {
+            if (isNotEmpty()) append("  ·  ")
+            append(if (it == MediaType.SERIES) "TV" else "MOVIE")
+        }
+    }
+    Box(Modifier.fillMaxWidth().height(430.dp).background(Color(0xFF050505))) {
+        val (img, wide) = meta?.let { Artwork.heroModel(it) } ?: (PosterLoader.model(fallbackPoster) to false)
+        HeroArtwork(model = img, wide = wide, modifier = Modifier.fillMaxSize())
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+            0f to Color.Black.copy(alpha = 0.05f),
+            0.42f to Color.Black.copy(alpha = 0.10f),
+            0.72f to Color.Black.copy(alpha = 0.72f),
+            1f to Color(0xFF050505)
+        )))
+        IconButton(onClick = onBack, modifier = Modifier.padding(8.dp)) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+        }
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 18.dp, vertical = 24.dp)) {
+            Box(Modifier.width(52.dp).height(2.dp).background(Color.White))
+            Spacer(Modifier.height(10.dp))
+            if (title.isNotBlank()) {
+                Text(title.uppercase(), color = Color.White, fontSize = 28.sp, lineHeight = 32.sp,
+                    letterSpacing = 1.4.sp, fontWeight = FontWeight.Medium, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis)
+            }
+            if (metadata.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(metadata, color = Color.White.copy(alpha = 0.72f), fontSize = 10.sp, letterSpacing = 0.8.sp)
+            }
         }
     }
 }

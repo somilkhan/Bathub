@@ -143,6 +143,7 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer.dash)
     implementation(libs.androidx.media3.datasource.okhttp)
     implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.session)
     // media3-effect — the GPU video-effects pipeline (GlEffect / HslAdjustment /
     // RgbAdjustment / Brightness / Contrast). ExoPlayer.setVideoEffects() is
     // inert without it: the classes are loaded reflectively by the frame
