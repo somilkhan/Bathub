@@ -128,7 +128,7 @@ class AppStore(private val ctx: Context) {
      * Stremio), and waits for the user to pick one instead of playing on its
      * own.
      */
-    fun playerEngineFlow(): Flow<String> = store.data.map { it[K.PLAYER_ENGINE] ?: "cloudstream" }\n\n    suspend fun playerEngine(): String = playerEngineFlow().first()\n\n    suspend fun setPlayerEngine(engine: String) {\n        store.edit { it[K.PLAYER_ENGINE] = if (engine == "hikari") "hikari" else "cloudstream" }\n    }\n\n    fun askServerOnPlayFlow(): Flow<Boolean> =
+    fun playerEngineFlow(): Flow<String> = store.data.map { it[K.PLAYER_ENGINE] ?: "hikari" }\n\n    suspend fun playerEngine(): String = playerEngineFlow().first()\n\n    suspend fun setPlayerEngine(engine: String) {\n        store.edit { it[K.PLAYER_ENGINE] = if (engine == "hikari") "hikari" else "cloudstream" }\n    }\n\n    fun askServerOnPlayFlow(): Flow<Boolean> =
         store.data.map { it[K.ASK_SERVER] ?: false }
 
     suspend fun askServerOnPlay(): Boolean = askServerOnPlayFlow().first()
