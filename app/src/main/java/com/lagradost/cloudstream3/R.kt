@@ -24,3 +24,21 @@ object R {
         @JvmField val preview_seekbar_key = com.hikari.app.R.string.cs_preview_seekbar_key
     }
 }
+
+
+    object font {
+        @JvmField val trebuchet_ms = 0
+        @JvmField val netflix_sans = 0
+        @JvmField val google_sans = 0
+        @JvmField val open_sans = 0
+        @JvmField val futura = 0
+        @JvmField val consola = 0
+        @JvmField val gotham = 0
+        @JvmField val lucida_grande = 0
+        @JvmField val stix_general = 0
+        @JvmField val times_new_roman = 0
+        @JvmField val verdana = 0
+        @JvmField val ubuntu_regular = 0
+        @JvmField val comic_sans = 0
+        @JvmField val poppins_regular = 0
+    }
