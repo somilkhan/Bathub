@@ -873,7 +873,18 @@ fun DetailScreen(
         // Never leave the guard stuck ON if the launch itself fails (e.g. the
         // player activity can't be resolved): report failure so the caller can
         // fall back to the source sheet instead of a dead tap.
-        return@launchPlayer runCatching { playerLauncher.launch(intent) }
+        return@launchPlayer runCatching {
+            val selectedEngine = playerEngine
+            val launchIntent = if (selectedEngine == "cloudstream") {
+                Intent(context, com.hikari.app.player.Cs3PlayerActivity::class.java).apply {
+                    putExtras(intent)
+                }
+            } else {
+                intent
+            }
+            com.hikari.app.data.Logs.log("Player", "launch engine=$selectedEngine")
+            playerLauncher.launch(launchIntent)
+        }
             .fold(onSuccess = { true }, onFailure = { playerLaunched = false; false })
     }
 
