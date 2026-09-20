@@ -947,7 +947,7 @@ fun DetailScreen(
         vm.resetLiveStreams()
         // Keep late/background source results connected to this play session.
         vm.liveSink = { partial ->
-            if (launched || playerLaunched) {
+            if (playerLaunched) {
                 val playable = partial.filter { s ->
                     s.ytId == null && !s.externalUrl && (s.url.isNotBlank() || s.isTorrent)
                 }
