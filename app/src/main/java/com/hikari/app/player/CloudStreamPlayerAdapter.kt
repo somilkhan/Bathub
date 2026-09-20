@@ -1,3 +1,5 @@
+@file:OptIn(com.lagradost.cloudstream3.Prerelease::class)
+
 package com.hikari.app.player
 
 import com.hikari.app.data.DrmSpec
@@ -87,7 +89,7 @@ object CloudStreamPlayerAdapter {
     private fun subtitleMimeType(url: String): String {
         return when {
             url.contains(".vtt", true) -> androidx.media3.common.MimeTypes.TEXT_VTT
-            url.contains(".ttml", true), url.contains(".xml", true) ->
+            url.contains(".ttml", true) || url.contains(".xml", true) ->
                 androidx.media3.common.MimeTypes.APPLICATION_TTML
             else -> androidx.media3.common.MimeTypes.APPLICATION_SUBRIP
         }
