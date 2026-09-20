@@ -1009,7 +1009,6 @@ class ExtensionsViewModel(app: Application) : AndroidViewModel(app) {
             version = o.optInt("version", 1),
             tvTypes = strings("tvTypes"),
             fileHash = o.optString("fileHash").ifBlank { null },
-            repositoryUrl = o.optString("repositoryUrl").ifBlank { null },
         )
     }
 
@@ -1032,7 +1031,7 @@ class ExtensionsViewModel(app: Application) : AndroidViewModel(app) {
         val identity = plugin.internalName.ifBlank {
             plugin.name.substringBeforeLast('.').ifBlank { "plugin" }
         }
-        val repoSalt = (plugin.repositoryUrl ?: "").hashCode().toString()
+        val repoSalt = plugin.url.substringBeforeLast('/').hashCode().toString()
         val fileName = "${identity}_${repoSalt}".replace(Regex("[^A-Za-z0-9._-]"), "_")
         installCs3Bytes(bytes, "$fileName.cs3", sourceUrl = plugin.url, iconUrl = plugin.iconUrl)
     }
