@@ -156,7 +156,6 @@ class PlayerActivity : ComponentActivity() {
 
     private var player: ExoPlayer? = null
     private var playerView: PlayerView? = null
-    private var cloudStreamMode = false
 
     private var sources: List<PlayerSource> = emptyList()
     private var currentIndex = 0
@@ -573,12 +572,6 @@ class PlayerActivity : ComponentActivity() {
         setContentView(R.layout.activity_player)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemUi()
-
-        if (intent.getStringExtra("playerEngine") == "cloudstream") {
-            cloudStreamMode = true
-            setupCloudStreamPlayback()
-            return
-        }
 
         playerView = findViewById(R.id.player_view)
         subtitleScale = subsPrefs.getFloat("sub_scale", 1f)
@@ -6026,75 +6019,7 @@ class PlayerActivity : ComponentActivity() {
         super.onStop()
     }
 
-    private fun setupCloudStreamPlayback() {
-        playerView = findViewById(R.id.player_view)
-        val raw = intent.getStringExtra("sources").orEmpty()
-        val source = runCatching {
-            val arr = JSONArray(raw)
-            if (arr.length() == 0) null else arr.getJSONObject(0)
-        }.getOrNull()
-
-        if (source == null) {
-            Toast.makeText(this, "No playable source.", Toast.LENGTH_SHORT).show()
-            finish()
-            return
-        }
-
-        val url = Http.normalizeDriveUrl(source.optString("url"))
-        if (url.isBlank()) {
-            Toast.makeText(this, "Invalid stream URL.", Toast.LENGTH_SHORT).show()
-            finish()
-            return
-        }
-
-        val headers = buildMap<String, String> {
-            val obj = source.optJSONObject("headers") ?: JSONObject()
-            val keys = obj.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                val value = obj.optString(key)
-                if (value.isNotBlank()) put(key, value)
-            }
-        }
-
-        val type = when {
-            source.optBoolean("isM3u8") -> MimeTypes.APPLICATION_M3U8
-            source.optBoolean("isMpd") -> MimeTypes.APPLICATION_MPD
-            url.substringBefore('?').endsWith(".m3u8", ignoreCase = true) -> MimeTypes.APPLICATION_M3U8
-            url.substringBefore('?').endsWith(".mpd", ignoreCase = true) -> MimeTypes.APPLICATION_MPD
-            else -> MimeTypes.VIDEO_MP4
-        }
-
-        val dataSource = OkHttpDataSource.Factory(PlayerHttp.client)
-            .setDefaultRequestProperties(headers)
-        val mediaSource = DefaultMediaSourceFactory(dataSource)
-            .createMediaSource(MediaItem.Builder().setUri(url).setMimeType(type).build())
-
-        player = ExoPlayer.Builder(this, NextRenderersFactory(this)).build().also { exo ->
-            playerView?.player = exo
-            exo.setMediaSource(mediaSource)
-            exo.prepare()
-            exo.playWhenReady = true
-            exo.addListener(object : Player.Listener {
-                override fun onPlayerError(error: PlaybackException) {
-                    Toast.makeText(
-                        this@PlayerActivity,
-                        "CloudStream player: " + error.errorCodeName,
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            })
-        }
-    }
-
     override fun onDestroy() {
-        if (cloudStreamMode) {
-            playerView?.player = null
-            player?.release()
-            player = null
-            super.onDestroy()
-            return
-        }
         stopBannerAnimators()
         recordProgress()
         liveStreamsJob?.cancel()
