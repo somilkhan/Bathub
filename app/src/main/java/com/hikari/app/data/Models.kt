@@ -44,6 +44,8 @@ data class Cs3Repo(
 /** A single installable plugin entry from a CloudStream repository. */
 data class Cs3RepoPlugin(
     val name: String,
+    /** CloudStream's stable plugin identifier; distinct from display name. */
+    val internalName: String = "",
     val description: String = "",
     val url: String,
     val iconUrl: String? = null,
