@@ -357,6 +357,10 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     val tabRoute = Routes.tabBaseOf(currentRoute)
     val showBar = tabRoute in Tabs.map { it.route }
     var showMoreSheet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showExtensionSwitch by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val hikariApp = context.applicationContext as HikariApp
+    val extensionProviders by hikariApp.providers.providers.collectAsState()
+    val selectedExtension by profileStore.homeProviderFlow().collectAsState(initial = "")
     var showHikariSplash by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
     var showProfilePicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showAddProfile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -509,6 +513,7 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
                     Text("MORE", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp,
                         letterSpacing = 2.sp, fontWeight = FontWeight.Medium,
                         modifier = Modifier.padding(bottom = 8.dp))
+                    MoreSheetItem("Extension") { showMoreSheet = false; showExtensionSwitch = true }
                     MoreSheetItem("History") { showMoreSheet = false; Routes.safeNavigate(nav, Routes.HISTORY) }
                     MoreSheetItem("Extensions") { showMoreSheet = false; Routes.safeNavigate(nav, Routes.EXTENSIONS) }
                     MoreSheetItem("Settings") { showMoreSheet = false; Routes.safeNavigate(nav, Routes.SETTINGS) }
@@ -516,6 +521,40 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
                 }
             }
         }
+    if (showExtensionSwitch) {
+        ModalBottomSheet(
+            onDismissRequest = { showExtensionSwitch = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    "EXTENSION",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 12.sp,
+                    letterSpacing = 2.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                MoreSheetItem("All Extensions") {
+                    profileScope.launch { profileStore.setHomeProvider("") }
+                    showExtensionSwitch = false
+                }
+                extensionProviders
+                    .filter { it.config.enabled }
+                    .sortedBy { it.config.name.lowercase() }
+                    .forEach { provider ->
+                        MoreSheetItem(provider.config.name) {
+                            profileScope.launch { profileStore.setHomeProvider(provider.config.id) }
+                            showExtensionSwitch = false
+                        }
+                    }
+                Spacer(Modifier.height(18.dp))
+            }
+        }
+    }
     if (showHikariSplash) {
         HikariSplash(onFinished = { showHikariSplash = false; showProfilePicker = true })
     }
