@@ -773,7 +773,7 @@ fun DetailScreen(
     val askServerFlow = remember { app.store.askServerOnPlayFlow() }
     val askServerOnPlay by askServerFlow.collectAsState(initial = false)
     val playerEngineFlow = remember { app.store.playerEngineFlow() }
-    val playerEngine by playerEngineFlow.collectAsState(initial = "cloudstream")
+    val playerEngine by playerEngineFlow.collectAsState(initial = "hikari")
     // Servers the player must know about before it starts. 1 = "as soon as the
     // first server is found" (the default).
     val startAfterServers = if (playWaitServers) playMinServers else 1
