@@ -358,9 +358,6 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     val showBar = tabRoute in Tabs.map { it.route }
     var showMoreSheet by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showExtensionSwitch by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    val hikariApp = context.applicationContext as HikariApp
-    val extensionProviders by hikariApp.providers.providers.collectAsState()
-    val selectedExtension by profileStore.homeProviderFlow().collectAsState(initial = "")
     var showHikariSplash by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
     var showProfilePicker by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showAddProfile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -369,6 +366,8 @@ fun AppRoot(themeKey: String = HikariThemeMode.DARK.key) {
     // app's own Home tab (not the website's home page).
     val context = LocalContext.current
     val profileStore = (context.applicationContext as HikariApp).store
+    val hikariApp = context.applicationContext as HikariApp
+    val extensionProviders by hikariApp.providers.providers.collectAsState()
     val profileFlow = androidx.compose.runtime.remember { profileStore.profilesFlow() }
     val profiles by profileFlow.collectAsState(initial = emptyList())
     val profileScope = rememberCoroutineScope()
