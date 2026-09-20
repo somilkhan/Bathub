@@ -463,11 +463,15 @@ class Cs3MainApiProvider(override val config: ProviderConfig) : ContentProvider 
                     catalogErrors[config.id] = fullCause(e)
                     return@withContext emptyList()
                 }
-                // CloudStream providers may rebuild/reorder HomePageLists between
-                // calls. Prefer the row name, then the original index.
-                val row = rows.firstOrNull { candidate ->
-                    candidate.name.isNotBlank() && candidate.name == ref.name
-                } ?: rows.getOrNull(rowIndex) ?: rows.firstOrNull()
+                // This ref was created from this exact row index in catalogs().
+                // Preserve that identity first: duplicate row names are legal, and
+                // providers may return multiple rows with the same display name.
+                // Only fall back to name matching if the original index disappeared.
+                val row = rows.getOrNull(rowIndex)
+                    ?: rows.firstOrNull { candidate ->
+                        candidate.name.isNotBlank() && candidate.name == ref.name
+                    }
+                    ?: rows.firstOrNull()
                 val rawItems = row?.list.orEmpty()
                 val rowItems = rawItems.mapNotNull { it.toMediaItem() }
                 if (rowItems.isEmpty()) {
